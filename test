@@ -1,0 +1,16 @@
+#!/bin/sh
+
+. ~/bin/epics.version 14.8 2>/dev/null
+
+
+# Simple script to run the edm shell with PVs only fetched from a locally
+# running copy of the server.
+
+# export EPICS_CA_ADDR_LIST=localhost
+# export EPICS_CA_AUTO_ADDR_LIST=NO
+
+if (($#)); then
+    "$@"
+else
+    runedm -p 6064 sr
+fi

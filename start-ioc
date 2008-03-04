@@ -1,0 +1,11 @@
+#!/bin/sh
+
+. /dls_sw/etc/profile
+
+export HOME="/tmp/$(id -un)"
+mkdir -p "$HOME"
+
+cd "$(dirname "$0")"
+python2.4 concentrator.py
+
+read -p 'Press return'

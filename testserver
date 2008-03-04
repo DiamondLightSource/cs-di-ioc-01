@@ -1,0 +1,11 @@
+#!/bin/sh
+
+export EPICS_CAS_SERVER_PORT=6064
+
+if [ "$1" = debug ]; then
+    PYTHON=/dls_sw/tools/python2.4-debug/bin/python2.4
+else
+    PYTHON=python2.4
+fi
+
+$PYTHON concentrator.py D
