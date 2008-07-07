@@ -1,11 +1,13 @@
 '''Management of beam current dependency.'''
 
 import os.path
+import numpy
+
+import cothread
+import builder
 
 from config import *
-from common import *
 from monitor import *
-
 from updater import *
 
 
@@ -15,36 +17,35 @@ def LoadBCD(db, ma):
     current.'''
     filenames = [
         os.path.join(BCD_SourceDir, BCD_FileFormat % locals()) for xy in 'XY']
-    return [array(map(float, file(filename).readlines()))
+    return [numpy.array(map(float, file(filename).readlines()))
         for filename in filenames]
     
 
 
 class AutoBCD:
-    '''This class looks after the beam current dependency waveforms
-    '''
+    '''This class looks after the beam current dependency waveforms.'''
     
     def __init__(self):
-        self.AutoBCD = server.Create('AUTOBCD',
-            0, self.Update, enums = ['Off', 'Zero', 'Auto'])
+        self.AutoBCD = builder.mbbOut('AUTOBCD',
+            'Off', 'Zero', 'Auto', on_update = self.Update)
         self.status = Status('AUTOBCD')
         self.mode = 0
         
-        server.Timer(1, self.UpdateStatus)
-        self.zero = zeros(BPM_count)
+        cothread.Timer(1, self.UpdateStatus, retrigger = True)
+        self.zero = numpy.zeros(BPM_count)
         self.db, self.ma = (22, 10)
 
 
     def UpdateBCD(self, target_X, target_Y):
         self.target_X = target_X
         self.target_Y = target_Y
-        BcdXUpdater.WriteNewValue(BcdXUpdater, target_X)
-        BcdYUpdater.WriteNewValue(BcdYUpdater, target_Y)
+        BcdXUpdater.WriteNewValue(target_X)
+        BcdYUpdater.WriteNewValue(target_Y)
 
 
-    def WriteNewValue(self, p, value):
+    def WriteNewValue(self, value):
         '''This is called when the attenuator value has changed.'''
-        self.db, self.ma = value[0]
+        self.db, self.ma = value
         if self.mode == 2:
             self.Update_Auto()
 
@@ -53,7 +54,7 @@ class AutoBCD:
         
 
     # Updater routines
-    def Update(self, pv, value):
+    def Update(self, value):
         try:
             action = self.Actions[int(value)]
         except:
@@ -83,7 +84,7 @@ class AutoBCD:
             return True
 
 
-    def UpdateStatus(self, tick):
+    def UpdateStatus(self):
         if self.mode == 0:
             self.status.Update(True)
         else:
@@ -91,9 +92,9 @@ class AutoBCD:
             # BCD target is our target and the BCD is at target.
             self.status.Update(
                 BcdXUpdater.at_target and
-                BcdXUpdater.writer.value == self.target_X and
+                numpy.all(BcdXUpdater.writer.get() == self.target_X) and
                 BcdYUpdater.at_target and
-                BcdYUpdater.writer.value == self.target_Y)
+                numpy.all(BcdYUpdater.writer.get() == self.target_Y))
 
     Actions = [Update_Off, Update_Zero, Update_Auto]
 
@@ -120,10 +121,12 @@ class Attenuation(CrossUpdater):
         self.auto_up = auto_up
         self.auto_down = auto_down
 
-        server.Create('ATTENUATOR:UP',
-            float(auto_up), self.write_change('auto_up'))
-        server.Create('ATTENUATOR:DOWN',
-            float(auto_down), self.write_change('auto_down'))
+        builder.aOut('ATTENUATOR:UP', 0, 100,
+            initial_value = auto_up,
+            on_update = self.write_change('auto_up'))
+        builder.aOut('ATTENUATOR:DOWN', 0, 100,
+            initial_value = auto_down,
+            on_update = self.write_change('auto_down'))
             
         
         # We directly control the ATTEN setting and BCD settings.
@@ -134,16 +137,17 @@ class Attenuation(CrossUpdater):
         self.auto_index = len(enums) - 1
         self.auto_mode = False
         self.holdoff = 0
-        CrossUpdater.__init__(self, 'ATTENUATION', updaters, values, enums)
+        CrossUpdater.__init__(self,
+            'ATTENUATION', updaters, values, enums)
 
         
-    def UpdateSetting(self, p, value):
+    def UpdateSetting(self, value):
         '''The special Auto mode is handle separately.'''
         self.auto_mode = int(value) == self.auto_index
         if self.auto_mode:
             return True
         else:
-            return CrossUpdater.UpdateSetting(self, p, value)
+            return CrossUpdater.UpdateSetting(self, value)
 
 
     def StepAttenuation(self, step):

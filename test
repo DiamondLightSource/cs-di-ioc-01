@@ -10,6 +10,8 @@
 # export EPICS_CA_AUTO_ADDR_LIST=NO
 
 if (($#)); then
+    export EPICS_CA_SERVER_PORT=6064
+    export EPICS_CA_REPEATER_PORT=6065
     "$@"
 else
     runedm -p 6064 sr

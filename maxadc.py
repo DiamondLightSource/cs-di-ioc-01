@@ -1,63 +1,63 @@
-from __future__ import division
+import numpy
 
-from common import *
+import builder
+
 from monitor import *
-
+from positions import BpmPositions
 import enabled
 import bcd
+
 
 MAX_ADC = 2**15
 
 class MaxADC(MonitorWaveform):
     def __init__(self):
-        MonitorWaveform.__init__(self,
-            'SA:MAXADC', 'MAXADCWF', datatype = dbr_sts_long)
+        MonitorWaveform.__init__(self, 'SA:MAXADC', 'MAXADCWF',
+            datatype = int, timestamps = True)
 
-        self.maxadc = server.Create('MAXADC', 0, low=0, high=MAX_ADC)
-        self.maxadc_pc = server.Create('MAXADC_PC',
-            0.0, low=0, high=100, units='%', precision=1)
+        self.maxadc = builder.longIn('MAXADC', 0, MAX_ADC)
+        self.maxadc_pc = builder.aIn('MAXADC_PC',
+            0.0, 100, EGU = '%', PREC = 1)
+        self.maxid = builder.stringIn('MAXADCID')
         
-        self.severity = array([0]*BPM_count)
-
-        self.maxid = server.Create('MAXADCID', '')
+        self.severity = numpy.zeros(BPM_count, dtype = int)
 
 
-    def MonitorCallback(self, index, args):
-        MonitorWaveform.MonitorCallback(self, index, args)
-        self.severity[index] = args.dbr.severity
+    def MonitorCallback(self, value, index):
+        MonitorWaveform.MonitorCallback(self, value, index)
+        self.severity[index] = value.severity
 
-    def Update(self, t):
-        MonitorWaveform.Update(self, t)
+    def Update(self):
+        MonitorWaveform.Update(self)
 
-        maxsev = max(self.severity)
-        maxval = max(self.array.value)
+        maxsev = numpy.amax(self.severity)
+        maxval = numpy.amax(self.value)
         maxval_pc = 100. * maxval / MAX_ADC
-        self.maxadc.update(maxval, severity=maxsev)
-        self.maxadc_pc.update(maxval_pc, severity=maxsev)
+        self.maxadc.set(maxval, severity=maxsev)
+        self.maxadc_pc.set(maxval_pc, severity=maxsev)
 
-        self.maxid.update(BPMS[argmax(self.array.value)])
+        self.maxid.set(BPMS[numpy.argmax(self.value)])
 
-        bcd.attenuation.UpdateMaxAdc(100. * self.array.value / MAX_ADC)
+        bcd.attenuation.UpdateMaxAdc(100. * self.value / MAX_ADC)
 
 
 class CurrentWaveform:
     def __init__(self):
         self.waveform = MonitorWaveform('SA:CURRENT', on_update = self.Update)
 
-        self.mean = server.Create('SA:CURRENT:MEAN', 0.0,
-            low = 0, high = 500, units = 'mA', precision = 3)
+        self.mean = builder.aIn('SA:CURRENT:MEAN', 
+            0, 500, EGU = 'mA', PREC = 3)
 
     def Update(self, t):
-        active = enabled.ActiveArray(self.waveform.array.value)
-        if active:
-            self.mean.update(mean(active))
+        active = enabled.ActiveArray(self.waveform.value)
+        if len(active) > 0:
+            self.mean.set(numpy.mean(active))
 
 
 MaxADC()
 
-from positions import BpmPositions
-server.Create('SPOS', BpmPositions)
-
-server.Create('BPMID', [1.1+i+0.1*j for i in range(24) for j in range(7)])
+builder.WaveformIn('SPOS', BpmPositions)
+builder.WaveformIn('BPMID',
+    [1.1+i+0.1*j for i in range(24) for j in range(7)])
 
 CurrentWaveform()

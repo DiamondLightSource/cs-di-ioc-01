@@ -1,12 +1,18 @@
-from __future__ import division
+import numpy
 
-from common import *
+import builder
+import cothread
 
-from dls.ca2 import catools
-import dls.green as green
+from cothread import catools 
 
-import enabled
+__all__ = ['CaPutAll', 'MonitorArray', 'MonitorWaveform', 'BPM_count', 'BPMS']
 
+
+
+# List of all BPMs in the storage ring.
+BPMS = ['SR%02dC-DI-EBPM-%02d' % (c+1, n+1)
+    for c in range(24) for n in range(7)]
+BPM_count = len(BPMS)
 
 # Converts a BPM specific PV into one PV per BPM.
 def BPMpvs(name):
@@ -14,35 +20,31 @@ def BPMpvs(name):
 
 
 
-def CaPutAll(pv, value, put_array=False):
-    if not put_array:
-        value = [value]*BPM_count
-    
-    '''Performs a background block caput to all BPM PVs with name pv.  Any
-    errors are merely logged to the console.'''
-    def Greenlet():
-        # green.co_sleep(1) spawn now queues the greenlet create request so
-        # will sleep 1 tick anyway
-
-        # What about timeouts here?  Does this timeout block other
-        # processing?  Doesn't seem to!
-        sl = catools.caput(
-            BPMpvs(pv), value, timeout = 5, throw = False)
-#         sl_fail = [s for s in sl if s != catools.ECA_NORMAL]
-#         if sl_fail:
-#             print 'CaPutAll', pv, value, '->', sl_fail
-
-    # Run the entire put process in the background.
-    green.spawn(Greenlet)
+def CaPutAll(pv, value):
+    '''Writes a value to all PVs.  The write process is spawned in the
+    background to avoid blocking any other activites.'''
+    def Write():
+        ok = catools.caput(BPMpvs(pv), value, throw = False)
+        if not numpy.all(ok):
+            print 'caput failed:'
+            for result in ok:
+                if not result:
+                    print '   ', result.name, '-', str(result)
+                    break       # for the moment...
+                    
+#    cothread.Spawn(Write)
+    Write()
 
 
-def MonitorArray(name, callback, datatype=None):
-    return [
-        catools.camonitor(pv,
-            lambda value, index=n: callback(index, value),
-            flags = catools.DBE_VALUE | catools.DBE_ALARM,
-            datatype = datatype)
-        for n, pv in enumerate(BPMpvs(name))]
+def MonitorArray(name, callback, datatype=None, timestamps = False):
+    if timestamps:
+        format = catools.FORMAT_TIME
+    else:
+        format = catools.FORMAT_RAW
+    return catools.camonitor(
+        BPMpvs(name), callback,
+        events = catools.DBE_VALUE | catools.DBE_ALARM,
+        datatype = datatype, format = format)
     
 
 
@@ -53,11 +55,11 @@ class MonitorWaveform:
     '''
     def __init__(self,
             name, server_name=None, tick=0.2, datatype=None,
-            initial_value=0.0, default_value=None,
-            on_update=None):
+            default_value=None,
+            on_update=None, timestamps=False):
 
         if server_name is None:     server_name = name
-        if default_value is None:   default_value = initial_value
+        if default_value is None:   default_value = 0
 
         self.name = name
         self.default_value = default_value
@@ -69,35 +71,38 @@ class MonitorWaveform:
         # unreachable BPMs by replacing stale values with defaults -- but we
         # need to hang onto the reported values in case the BPM becomes
         # reachable again.
-        self.value = array([initial_value]*BPM_count)
-        self.array = server.Create(server_name, [initial_value]*BPM_count)
+        self.value = numpy.zeros(BPM_count, dtype = datatype)
+        self.waveform = builder.Waveform(
+            server_name, +self.value, datatype = datatype)
         
-        self.monitors = MonitorArray(name, self.MonitorCallback, datatype)
         self.changed = False
+        MonitorArray(name, self.MonitorCallback,
+            datatype = datatype, timestamps = timestamps)
+        cothread.Timer(tick, self.Update, retrigger=True)
 
-        server.Timer(tick, self.Update)
-
-    def MonitorCallback(self, index, args):
+    def MonitorCallback(self, value, index):
         '''This routine is called each time any of the monitored elements
         changes.'''
-        self.value[index] = args.dbr.value[0]
+        self.value[index] = value
         self.changed = True
 
     def UpdateDefault(self, default_value):
         self.default_value = default_value
         self.changed = True
 
-    def Update(self, t):
+    def Update(self):
         '''This is called on a timer and is used to generate a collected update
         for the entire waveform.'''
         # For all those BPMs which are unresponsive we substitute the current
         # default value
+        import enabled
         new_value = enabled.WaveformDefaults(self.value, self.default_value)
-        changed = sometrue(new_value != self.array.value)
+        current_value = self.waveform.get()
+        
+        changed = (new_value != current_value).any()
         if changed:
-            self.array.update(new_value)
+            self.waveform.set(+new_value)
         if self.on_update:
             self.on_update(changed)
 
 
-__all__ = ['CaPutAll', 'MonitorArray', 'MonitorWaveform']

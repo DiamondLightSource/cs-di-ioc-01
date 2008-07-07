@@ -1,16 +1,13 @@
 '''Core EBPM monitoring code.  Monitors the SA positions and the ENABLED flags,
 aggregating the result into a set of global health monitoring PVs.'''
 
-from __future__ import division
+from numpy import *
 
-from common import *
+import builder
+import cothread
+
 from monitor import *
 
-
-Age = zeros(BPM_count)
-Enabled = zeros(BPM_count)
-
-EnabledList = arange(BPM_count)
 
 # How far we will allow aging before reporting the BPM as unreachable.  We
 # set this to four seconds to reduce the chance of spurious events.
@@ -19,23 +16,27 @@ EnabledList = arange(BPM_count)
 # drop-outs the age limit is set quite high.
 AGE_LIMIT = 20      # 4 seconds, 5 ticks per second
 
+Age = ones(BPM_count, dtype=int) * AGE_LIMIT
+Enabled = zeros(BPM_count)
+
+EnabledList = nonzero(Enabled)
 
 def WaveformDefaults(values, defaults):
     '''Sets all unreachable or disabled entries in values to the given
     defaults.'''
-    return where(Health.value == 0, values, defaults)
+    return where(Health.get() == 0, values, defaults)
 
 def ActiveArray(values):
     '''Returns all the currently active entries.'''
-    return take(values, EnabledList)
+    return values[EnabledList]
 
 
-def EnabledCallback(index, value):
+def EnabledCallback(value, index):
     Age[index] = 0
-    Enabled[index] = value.value
+    Enabled[index] = value
 
     
-def TimerTick(tick):
+def TimerTick():
     # Age all the non responding entries and identify those which have passed
     # the age limit.
     global Age
@@ -50,27 +51,30 @@ def TimerTick(tick):
     #   2 => more than AGE_LIMIT ticks with no update: unreachable
     #   1 => marked as disabled
     #   0 => enabled and operating normally
-    NewHealth = where(Aged, 2, 1-Enabled)
-    if NewHealth != Health.value:
-        Health.value[:] = NewHealth
-        Health.update()
+    NewHealth = where(Aged, 2, 1 - Enabled)
+    if (NewHealth != Health.get()).any():
+        Health.set(NewHealth)
         global EnabledList
         EnabledList = nonzero(NewHealth == 0)
 
     # Count the three possible health states
-    EnabledCount.update(len(nonzero(NewHealth == 0)))
-    DisabledCount.update(len(nonzero(NewHealth == 1)))
-    UnreachableCount.update(len(nonzero(NewHealth == 2)))
+    EnabledCount    .set(size(nonzero(NewHealth == 0)))
+    DisabledCount   .set(size(nonzero(NewHealth == 1)))
+    UnreachableCount.set(size(nonzero(NewHealth == 2)))
 
 
 class PositionWaveform(MonitorWaveform):
     def __Monitor(self, extra):
-        return server.Create('%s:%s' % (self.name, extra), 0.0,
-            low = -1.0, high = 1.0, precision = 5, units = 'mm')
+        return builder.aIn(
+            '%s:%s' % (self.name, extra), -1, 1,
+            PREC = 5,   EGU  = 'mm')
         
     def __MonitorWF(self, extra):
-        return server.Create('%s:%s' % (self.name, extra), [0.0]*BPM_count,
-            low = -1.0, high = 1.0, precision = 5, units = 'mm')
+        return builder.Waveform(
+            '%s:%s' % (self.name, extra), zeros(BPM_count),
+            datatype = float32,
+            LOPR = -1,  HOPR = 1,
+            PREC = 5,   EGU  = 'mm')
         
     def __init__(self, name):
         MonitorWaveform.__init__(self, name, tick=0.1)
@@ -82,40 +86,40 @@ class PositionWaveform(MonitorWaveform):
         self.min_wf = self.__MonitorWF('MINWF')
         self.max_wf = self.__MonitorWF('MAXWF')
 
-        self.reset = server.Create(
-            '%s:RESET' % self.name, 0, self.ResetMinMax)
+        self.reset = builder.Action(
+            '%s:RESET' % self.name, on_update = self.ResetMinMax)
 
-    def Update(self, t):
-        MonitorWaveform.Update(self, t)
+    def Update(self):
+        MonitorWaveform.Update(self)
 
-        active_array = ActiveArray(self.array.value)
+        active_array = ActiveArray(self.value)
         # Quick and dirty hack if nothing is live to ensure that none of the
         # array inspections routines below fail.
         if len(active_array) < 2:  active_array = array([0.0, 0.0])
-        self.std.update(std(active_array))
-        self.mean.update(mean(active_array))
-        self.min.update(min(active_array))
-        self.max.update(max(active_array))
+        self.std.set(std(active_array))
+        self.mean.set(mean(active_array))
+        self.min.set(min(active_array))
+        self.max.set(max(active_array))
 
         inactive_zero = array([0.0]*BPM_count)
-        put(inactive_zero, EnabledList, active_array)
-        self.min_wf.update(minimum(inactive_zero, self.min_wf.value))
-        self.max_wf.update(maximum(inactive_zero, self.max_wf.value))
+        inactive_zero[EnabledList] = active_array
+        self.min_wf.set(minimum(inactive_zero, self.min_wf.get()))
+        self.max_wf.set(maximum(inactive_zero, self.max_wf.get()))
 
-    def ResetMinMax(self, pv, value):
-        active_array = ActiveArray(self.array.value)
-        inactive_zero = array([0.0]*BPM_count)
-        put(inactive_zero, EnabledList, active_array)
-        self.min_wf.update(inactive_zero)
-        self.max_wf.update(inactive_zero)
+    def ResetMinMax(self, value):
+        active_array = ActiveArray(self.value)
+        inactive_zero = zeros(BPM_count)
+        inactive_zero[EnabledList] = active_array
+        self.min_wf.set(inactive_zero)
+        self.max_wf.set(inactive_zero)
         return True
 
 
 
 # We hook age reset code into the SA:X monitoring
 class MonitorAgeReset(PositionWaveform):
-    def MonitorCallback(self, index, args):
-        PositionWaveform.MonitorCallback(self, index, args)
+    def MonitorCallback(self, value, index):
+        PositionWaveform.MonitorCallback(self, value, index)
         Age[index] = 0
 
         
@@ -125,11 +129,11 @@ class MonitorAgeReset(PositionWaveform):
 #   0 => Responding and enabled
 #   1 => Responding and disabled
 #   2 => Not responding (so disabled by default)
-Health = server.Create('ENABLED', array([2] * BPM_count))
-EnabledCount = server.Create('COUNT_ENABLED', 0)
-DisabledCount = server.Create('COUNT_DISABLED', 0)
-UnreachableCount = server.Create('COUNT_UNREACHABLE', 0)
-server.Timer(0.2, TimerTick)
+Health = builder.Waveform('ENABLED', ones(BPM_count, dtype = int) * 2)
+EnabledCount     = builder.aIn('COUNT_ENABLED',     initial_value = 0)
+DisabledCount    = builder.aIn('COUNT_DISABLED',    initial_value = 0)
+UnreachableCount = builder.aIn('COUNT_UNREACHABLE', initial_value = 0)
+cothread.Timer(0.2, TimerTick, retrigger = True)
 
 MonitorAgeReset('SA:X')
 PositionWaveform('SA:Y')

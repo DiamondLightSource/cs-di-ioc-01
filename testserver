@@ -1,11 +1,13 @@
 #!/bin/sh
 
+PYIOC_VERSION=1-2
+PYIOC=/dls_sw/prod/R3.14.8.2/support/pythonSoftIoc/$PYIOC_VERSION/pythonIoc
+
+# For development
+PYIOC=/home/mga83/epics/pythonSoftIoc/pythonIoc
+
+export EPICS_CA_MAX_ARRAY_BYTES=1000000
 export EPICS_CAS_SERVER_PORT=6064
 
-if [ "$1" = debug ]; then
-    PYTHON=/dls_sw/tools/python2.4-debug/bin/python2.4
-else
-    PYTHON=python2.4
-fi
-
-$PYTHON concentrator.py D
+cd "$(dirname "$0")"
+$PYIOC concentrator.py D

@@ -1,11 +1,10 @@
 #!/bin/sh
 
-. /dls_sw/etc/profile
+PYIOC_VERSION=1-2
+PYIOC=/dls_sw/prod/R3.14.8.2/support/pythonSoftIoc/$PYIOC_VERSION/pythonIoc
 
-export HOME="/tmp/$(id -un)"
-mkdir -p "$HOME"
+# For development
+# PYIOC=/home/mga83/epics/pythonSoftIoc/pythonIoc
 
 cd "$(dirname "$0")"
-python2.4 concentrator.py
-
-read -p 'Press return'
+$PYIOC concentrator.py
