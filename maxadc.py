@@ -61,3 +61,18 @@ builder.WaveformIn('BPMID',
     [1.1+i+0.1*j for i in range(24) for j in range(7)])
 
 CurrentWaveform()
+
+
+Monitors = [
+    # Free running deviation statistics
+    ('FR:STDX',     0.2, float),   ('FR:PPX',      0.2, float),
+    ('FR:STDY',     0.2, float),   ('FR:PPY',      0.2, float),
+
+    # Postmortem statistics
+    ('PM:X_OFFSET',   1, int),     ('PM:X_OFL',      1, bool), 
+    ('PM:Y_OFFSET',   1, int),     ('PM:Y_OFL',      1, bool), 
+    ('PM:ADC_OFFSET', 1, int),     ('PM:ADC_OFL',    1, bool),
+]
+
+for name, tick, datatype in Monitors:
+    MonitorWaveform(name, tick = tick, datatype = datatype)

@@ -108,7 +108,7 @@ class Attenuation(CrossUpdater):
     HOLDOFF = 5
 
     def write_change(self, name, min=0, max=100):
-        def on_write(pv, value):
+        def on_write(value):
             if min <= value <= max:
                 setattr(self, name, value)
                 return True
@@ -141,32 +141,35 @@ class Attenuation(CrossUpdater):
             'ATTENUATION', updaters, values, enums)
 
         
-    def UpdateSetting(self, value):
-        '''The special Auto mode is handle separately.'''
-        self.auto_mode = int(value) == self.auto_index
+    def UpdateSetting(self, index):
+        # The special Auto mode is handle separately.
+        self.auto_mode = index == self.auto_index
         if self.auto_mode:
             return True
         else:
-            return CrossUpdater.UpdateSetting(self, value)
+            return CrossUpdater.UpdateSetting(self, index)
 
 
     def StepAttenuation(self, step):
         new_index = self.index + step
-        if 0 <= new_index < self.auto_index:
+        if 0 <= new_index < self.auto_index and new_index != self.index:
             self.holdoff = self.HOLDOFF
-            CrossUpdater.UpdateSetting(self, None, new_index)
+            CrossUpdater.UpdateSetting(self, new_index)
             
 
     def UpdateMaxAdc(self, values):
         if self.holdoff:
             self.holdoff -= 1
         elif self.auto_mode:
+            import enabled
             # We only pay any attention in auto mode
             # Only look at values from enabled BPMs
-            mask = enabled.Health.value == 0
+            mask = enabled.Health.get() == 0
             # Count the number of BPMs above the two AGC thresholds
-            high_count    = sum(where(mask, values > self.auto_up, 0))
-            not_low_count = sum(where(mask, values > self.auto_down, 0))
+            high_count    = \
+                numpy.sum(numpy.where(mask, values > self.auto_up, 0))
+            not_low_count = \
+                numpy.sum(numpy.where(mask, values > self.auto_down, 0))
 
             # If enough BPMs are over the threshold we trigger a switch.
             if high_count >= 2:

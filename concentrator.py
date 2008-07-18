@@ -14,7 +14,8 @@ if DEBUG:
     cothread.Timer(1, Log, retrigger = True)
 else:
     from pkg_resources import require
-    require('cothread==1.7')
+    require('numpy==1.1.0')
+    require('cothread==1.8')
     require('dls.builder==1.4')
 
 import builder

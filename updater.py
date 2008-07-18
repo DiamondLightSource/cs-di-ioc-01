@@ -124,13 +124,12 @@ class CrossUpdater:
         self.index = 0
         self.setting = self.lookup[self.index]
 
-    def UpdateSetting(self, value):
+    def UpdateSetting(self, index):
         try:
-            index = int(value)
             self.setting = self.lookup[index]
             self.index = index
         except:
-            print 'invalid value', value
+            print 'invalid value', index
             return False
         else:
             for pv, value in zip(self.pvlist, self.setting):
