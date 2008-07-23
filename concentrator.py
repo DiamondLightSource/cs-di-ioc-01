@@ -15,7 +15,7 @@ if DEBUG:
 else:
     from pkg_resources import require
     require('numpy==1.1.0')
-    require('cothread==1.8')
+    require('cothread==1.9')
     require('dls.builder==1.4')
 
 import builder
