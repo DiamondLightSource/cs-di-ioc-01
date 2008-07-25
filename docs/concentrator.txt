@@ -1,0 +1,153 @@
+Diagnostics Concentrator
+========================
+Michael Abbott
+
+This presents an introduction to the operation and architecture of the
+Diagnostics Concentrator soft IOC.
+
+
+Concentrator Functionality
+--------------------------
+
+The Diagnostics Concentrator performs two key functions:
+
+. Readings from all storage ring BPMs are collected together into waveforms
+indexed by BPM id.
+
+. Centralised control of all storage ring BPMs is provided through a number of
+simple controls.
+
+All PVs provided by the concentrator are of the form +SR-DI-EBPM-01:+<name>.
+The following names are of particular interest.
+
++SA:X+, +SA:Y+:: Beam position around the storage ring.
+
++MAXADC_PC+:: Maximum ADC reading across all BPMs as a percentage of the
+maximum possible reading.
+
++ATTENUATION_S+:: Sets attenuation values for all BPMs.  The special setting
+``Auto'' enables automatic incrementing or decrease of attenuators as the
++MAXADC_PC+ value rises or falls.
+
++AUTOBCD+:: Controls the management of BCD (``Beam Current Dependency'')
+values written to all storage ring BPMs.
+
++MODE_S+:: Switches between ``Orbit'' and ``Tune'' modes, intended to be used
+as follows:
++
+*************
+'Orbit':: Normal machine operation with switches running and BPM detuned.
+Provides most accurate position measurement, but adds high frequency artifacts
+to measured beam.
+'Tune':: Switches disabled and detune set to zero.  Intended for use with
+machine physics measurements.
+*************
+
+
+
+
+Concentrator Structure
+----------------------
+
+Concentrator Dependencies
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The concentrator depends on the following python components.
+
++pythonIoc+::
+
+This program is a EPICS soft IOC together with a Python interpreter and some
+supporting libraries to provide Python device support.
+
++numpy+::
+
+The numeric python library is used to provide support for array computations.
+A locally patched version is used in order to work around some memory leak
+bugs.
+
++cothread+::
+
+The cothread library is used to provide Python bindings for EPICS channel
+access.
+
++dls.builder+::
+
+The builder library is used by the pythonIoc libraries to help with the
+dynamic creation of EPICS records.
+
+
+
+Concentrator Files
+~~~~~~~~~~~~~~~~~~
+
++start-ioc+::
+
+Startup script.  Defines the version of the python IOC in use and starts the
+concentrator script using the python IOC script.
+
+
++concentrator.py+::
+
+Startup code.  Defines versions of the various components, ensures that the
+modules are imported in the correct sequence, and performs final IOC
+initialisation together with the interactive shell.
+
+
++config.py+::
+
+Imports the concentrator configuration file.  The path to this file is
+hard-wired to +/home/ops/diagnostics/concentrator/CS-DI-IOC-01.config+.
+
+
++monitor.py+::
+
+Code for monitoring a group of PVs and assembling the result into a single
+waveform.  It will be helpful in the future to separate this out into C code,
+possibly as a separate implementation, as the processing here is proving to be
+extremely CPU intensive.
+
+
++enabled.py+::
+
+Monitors the health of all of the PVs.  The action of this code is tightly
+interwoven with +monitor.py+, as disabled BPMs need to be treated specially.
+
+
++maxadc.py+::
+
+Monitors a number of simple waveforms with basic functionality.
+
+
++interlock.py+::
+
+Monitors interlock reasons and provides +SR-DI-EBPM-01:IL:RESET+ button.
+
+
++updater.py+::
+
+Manages groups of PVs with centralised control.  This is used to provide the
+central coordinated control functionality of the concentrator.
+
+
++bcd.py+::
+
+Implements the ``Beam Current Dependency'' functionality of the concentrator:
+writes to the +BCD+ fields of all BPMs.  Also implements the automatic
+attenuation management function.
+
+
++positions.py+::
+
+Used to build waveform +SR-DI-EBPM-01:SPOS' of BPM positions (in metres)
+around the ring.  Probably not actually used anywhere.
+
+
+
+Further Implementation Notes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The current implementation of the concentrator is proving very CPU intensive:
+a great deal of processing seems to be required to handle all of the PV
+updates being assembled into waveforms.  It will be a good idea in the future
+to separate out the waveform assembly -- this is work in progress.
+
