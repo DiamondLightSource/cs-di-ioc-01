@@ -53,6 +53,7 @@ class MonitorWaveform:
     array of PVs, one per BPM.  The PV value read from each BPM is written into
     self.array.
     '''
+    
     def __init__(self,
             name, server_name=None, tick=0.2, datatype=None,
             default_value=None,
@@ -71,9 +72,9 @@ class MonitorWaveform:
         # unreachable BPMs by replacing stale values with defaults -- but we
         # need to hang onto the reported values in case the BPM becomes
         # reachable again.
-        self.value = numpy.zeros(BPM_count, dtype = datatype)
+        self.raw_value = numpy.zeros(BPM_count, dtype = datatype)
         self.waveform = builder.Waveform(
-            server_name, +self.value, datatype = datatype)
+            server_name, +self.raw_value, datatype = datatype)
         
         self.changed = False
         MonitorArray(name, self.MonitorCallback,
@@ -83,7 +84,7 @@ class MonitorWaveform:
     def MonitorCallback(self, value, index):
         '''This routine is called each time any of the monitored elements
         changes.'''
-        self.value[index] = value
+        self.raw_value[index] = value
         self.changed = True
 
     def UpdateDefault(self, default_value):
@@ -96,13 +97,25 @@ class MonitorWaveform:
         # For all those BPMs which are unresponsive we substitute the current
         # default value
         import enabled
-        new_value = enabled.WaveformDefaults(self.value, self.default_value)
-        current_value = self.waveform.get()
+        new_value = enabled.WaveformDefaults(
+            self.raw_value, self.default_value)
         
-        changed = (new_value != current_value).any()
+        changed = (new_value != self.masked_value).any()
         if changed:
             self.waveform.set(+new_value)
         if self.on_update:
             self.on_update(changed)
 
+    @property
+    def masked_value(self):
+        '''Returns the masked value as presented to the outside.  This is
+        distinct from the raw value as received from BPMs.'''
+        return self.waveform.get()
 
+    @property
+    def active_value(self):
+        '''Returns the subset of "active" values: rather than defaulting
+        disabled values, in this version they are removed from the array.
+        This means that the active_value array may be any length <= 168.'''
+        import enabled
+        return enabled.ActiveArray(self.raw_value)

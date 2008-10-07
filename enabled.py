@@ -92,7 +92,7 @@ class PositionWaveform(MonitorWaveform):
     def Update(self):
         MonitorWaveform.Update(self)
 
-        active_array = ActiveArray(self.value)
+        active_array = self.active_value
         # Quick and dirty hack if nothing is live to ensure that none of the
         # array inspections routines below fail.
         if len(active_array) < 2:  active_array = array([0.0, 0.0])
@@ -107,7 +107,7 @@ class PositionWaveform(MonitorWaveform):
         self.max_wf.set(maximum(inactive_zero, self.max_wf.get()))
 
     def ResetMinMax(self, value):
-        active_array = ActiveArray(self.value)
+        active_array = self.active_value
         inactive_zero = zeros(BPM_count)
         inactive_zero[EnabledList] = active_array
         self.min_wf.set(inactive_zero)

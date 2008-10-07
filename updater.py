@@ -89,7 +89,8 @@ class Updater:
         self.writer.set(value)
 
     def Update(self, changed):
-        self.at_target = (self.monitor.value == self.writer.get()).all()
+        self.at_target = (
+            self.monitor.masked_value == self.writer.get()).all()
         self.status.Update(self.at_target)
 
 

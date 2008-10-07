@@ -14,7 +14,7 @@ class InterlockReason: #(MonitorWaveform):
 
     def Update(self, changed):
 #        if MonitorWaveform.Update(self, t):
-        reason = self.reason.value
+        reason = self.reason.masked_value
         self.x.set(reason & 1)
         self.y.set((reason & 2) >> 1)
         self.adc.set((reason & 0x18) != 0)

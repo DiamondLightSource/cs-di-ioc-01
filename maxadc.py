@@ -30,15 +30,16 @@ class MaxADC(MonitorWaveform):
     def Update(self):
         MonitorWaveform.Update(self)
 
+        maxadcwf = self.masked_value
         maxsev = numpy.amax(self.severity)
-        maxval = numpy.amax(self.value)
+        maxval = numpy.amax(maxadcwf)
         maxval_pc = 100. * maxval / MAX_ADC
         self.maxadc.set(maxval, severity=maxsev)
         self.maxadc_pc.set(maxval_pc, severity=maxsev)
 
-        self.maxid.set(BPMS[numpy.argmax(self.value)])
+        self.maxid.set(BPMS[numpy.argmax(maxadcwf)])
 
-        bcd.attenuation.UpdateMaxAdc(100. * self.value / MAX_ADC)
+        bcd.attenuation.UpdateMaxAdc(100. * maxadcwf / MAX_ADC)
 
 
 class CurrentWaveform:
@@ -49,7 +50,7 @@ class CurrentWaveform:
             0, 500, EGU = 'mA', PREC = 3)
 
     def Update(self, t):
-        active = enabled.ActiveArray(self.waveform.value)
+        active = self.waveform.active_value
         if len(active) > 0:
             self.mean.set(numpy.mean(active))
 
@@ -63,16 +64,17 @@ builder.WaveformIn('BPMID',
 CurrentWaveform()
 
 
-Monitors = [
-    # Free running deviation statistics
-    ('FR:STDX',     0.2, float),   ('FR:PPX',      0.2, float),
-    ('FR:STDY',     0.2, float),   ('FR:PPY',      0.2, float),
+# Free running deviation statistics
+MonitorWaveform('FR:STDX', tick = 0.2)
+MonitorWaveform('FR:PPX',  tick = 0.2)
+MonitorWaveform('FR:STDY', tick = 0.2)
+MonitorWaveform('FR:PPY',  tick = 0.2)
 
-    # Postmortem statistics
-    ('PM:X_OFFSET',   1, int),     ('PM:X_OFL',      1, bool), 
-    ('PM:Y_OFFSET',   1, int),     ('PM:Y_OFL',      1, bool), 
-    ('PM:ADC_OFFSET', 1, int),     ('PM:ADC_OFL',    1, bool),
-]
+# Postmortem statistics
+MonitorWaveform('PM:X_OFL',      tick = 1, datatype = bool)
+MonitorWaveform('PM:Y_OFL',      tick = 1, datatype = bool)
+MonitorWaveform('PM:ADC_OFL',    tick = 1, datatype = bool)
 
-for name, tick, datatype in Monitors:
-    MonitorWaveform(name, tick = tick, datatype = datatype)
+MonitorWaveform('PM:X_OFFSET',   tick = 1, datatype = int)
+MonitorWaveform('PM:Y_OFFSET',   tick = 1, datatype = int)
+MonitorWaveform('PM:ADC_OFFSET', tick = 1, datatype = int)
