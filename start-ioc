@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PYIOC_VERSION=1-2
+PYIOC_VERSION=1-3
 PYIOC=/dls_sw/prod/R3.14.8.2/support/pythonSoftIoc/$PYIOC_VERSION/pythonIoc
 
 # For development

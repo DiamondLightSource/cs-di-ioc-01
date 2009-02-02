@@ -5,18 +5,19 @@
 import sys
 DEBUG = 'D' in sys.argv[1:]
 if DEBUG:
+    print 'Running in debug mode'
     sys.path.append('/scratch/local/python-debug')
+    sys.path.append('/home/mga83/epics/iocbuilder')
     sys.path.append('/home/mga83/epics/cothread')
-    sys.path.append('/home/mga83/epics/builder/build/lib')
 
     import cothread
     def Log(): print 'refs: %8d' % sys.gettotalrefcount()
     cothread.Timer(1, Log, retrigger = True)
 else:
     from pkg_resources import require
-    require('numpy==1.1.0')
-    require('cothread==1.9')
-    require('dls.builder==1.4')
+    print require('numpy==1.1.0')
+    print require('cothread==1.11')
+    print require('iocbuilder==1.7')
 
 import builder
 
