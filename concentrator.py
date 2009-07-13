@@ -16,7 +16,7 @@ if DEBUG:
 else:
     from pkg_resources import require
     print require('numpy==1.1.0')
-    print require('cothread==1.11')
+    print require('cothread==1.14')
     print require('iocbuilder==1.7')
 
 import builder
@@ -28,6 +28,7 @@ import updater
 import bcd
 import maxadc
 import interlock
+import autocurrent
 
 
 from softioc import *

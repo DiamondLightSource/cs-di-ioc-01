@@ -6,6 +6,7 @@ from monitor import *
 from positions import BpmPositions
 import enabled
 import bcd
+import config
 
 
 MAX_ADC = 2**15
@@ -44,15 +45,24 @@ class MaxADC(MonitorWaveform):
 
 class CurrentWaveform:
     def __init__(self):
-        self.waveform = MonitorWaveform('SA:CURRENT', on_update = self.Update)
+        invalid_bpms = [7*(c-1) + n-1 for c, n in config.BPMS_no_current]
+        self.valid = numpy.ones(168, dtype=bool)
+        self.valid[invalid_bpms] = False
+        
+        self.waveform = MonitorSimpleWaveform('SA:CURRENT',
+            on_update = self.Update)
 
         self.mean = builder.aIn('SA:CURRENT:MEAN', 
             0, 500, EGU = 'mA', PREC = 3)
 
-    def Update(self, t):
-        active = self.waveform.active_value
-        if len(active) > 0:
-            self.mean.set(numpy.mean(active))
+    def Update(self):
+        # Select only the BPMs which are health and marked as valid.
+        active = (enabled.Health.get() == 0) & self.valid
+        values = self.waveform.value[active]
+        if len(values) > 0:
+            self.mean.set(numpy.mean(values))
+        else:
+            self.mean.set(0)
 
 
 MaxADC()
@@ -61,7 +71,7 @@ builder.WaveformIn('SPOS', BpmPositions)
 builder.WaveformIn('BPMID',
     [1.1+i+0.1*j for i in range(24) for j in range(7)])
 
-CurrentWaveform()
+current = CurrentWaveform()
 
 
 # Free running deviation statistics

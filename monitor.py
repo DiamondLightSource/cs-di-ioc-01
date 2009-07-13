@@ -5,7 +5,10 @@ import cothread
 
 from cothread import catools 
 
-__all__ = ['CaPutAll', 'MonitorArray', 'MonitorWaveform', 'BPM_count', 'BPMS']
+__all__ = ['CaPutAll',
+    'MonitorArray', 'MonitorValue',
+    'MonitorWaveform', 'MonitorSimpleWaveform',
+    'BPM_count', 'BPMS']
 
 
 
@@ -23,17 +26,13 @@ def BPMpvs(name):
 def CaPutAll(pv, value):
     '''Writes a value to all PVs.  The write process is spawned in the
     background to avoid blocking any other activites.'''
-    def Write():
-        ok = catools.caput(BPMpvs(pv), value, throw = False)
-        if not numpy.all(ok):
-            print 'caput failed:'
-            for result in ok:
-                if not result:
-                    print '   ', result.name, '-', str(result)
-                    break       # for the moment...
-                    
-#    cothread.Spawn(Write)
-    Write()
+    ok = catools.caput(BPMpvs(pv), value, throw = False)
+    if not numpy.all(ok):
+        print 'caput failed:'
+        for result in ok:
+            if not result:
+                print '   ', result.name, '-', str(result)
+                break       # for the moment...
 
 
 def MonitorArray(name, callback, datatype=None, timestamps = False):
@@ -45,9 +44,57 @@ def MonitorArray(name, callback, datatype=None, timestamps = False):
         BPMpvs(name), callback,
         events = catools.DBE_VALUE | catools.DBE_ALARM,
         datatype = datatype, format = format)
+
     
+class MonitorValue:
+    def __init__(self, names, datatype=None, **kargs):
+        if isinstance(names, str):
+            self.value = 0
+            update = self.update_scalar
+        else:
+            self.value = numpy.zeros(len(names), dtype = datatype)
+            update = self.update_vector
+        catools.camonitor(names, update, datatype = datatype, **kargs)
+
+    def update_scalar(self, value):
+        self.value = value
+
+    def update_vector(self, value, index):
+        self.value[index] = value
+        
 
 
+class MonitorSimpleWaveform:
+    def __init__(self,
+            name, server_name=None, tick=0.2, datatype=None,
+            on_update=None, timestamps=False):
+
+        if server_name is None:
+            server_name = name
+
+        self.on_update = on_update
+
+        self.value = numpy.zeros(BPM_count, dtype = datatype)
+        self.waveform = builder.Waveform(
+            server_name, +self.value, datatype = datatype)
+        
+        MonitorArray(name, self.MonitorCallback,
+            datatype = datatype, timestamps = timestamps)
+        cothread.Timer(tick, self.Update, retrigger=True)
+
+    def MonitorCallback(self, value, index):
+        '''This routine is called each time any of the monitored elements
+        changes.'''
+        self.value[index] = value
+
+    def Update(self):
+        '''This is called on a timer and is used to generate a collected update
+        for the entire waveform.'''
+        self.waveform.set(+self.value)
+        if self.on_update:
+            self.on_update()
+
+            
 class MonitorWaveform:
     '''The MonitorWaveform class is the basic building block for monitoring an
     array of PVs, one per BPM.  The PV value read from each BPM is written into

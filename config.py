@@ -3,7 +3,7 @@
 # found in /home/ops/diagnostics/concentrator/concentrator.config
 
 import sys
-if 'D' in sys.argv[1:]:
+if 'C' in sys.argv[1:]:
     CONFIG_FILE = 'CS-DI-IOC-01.config'
 else:
     CONFIG_FILE = '/home/ops/diagnostics/concentrator/CS-DI-IOC-01.config'

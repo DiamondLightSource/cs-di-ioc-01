@@ -3,8 +3,10 @@ aggregating the result into a set of global health monitoring PVs.'''
 
 from numpy import *
 
+import alarm
 import builder
 import cothread
+from cothread import catools
 
 from monitor import *
 
@@ -35,6 +37,16 @@ def EnabledCallback(value, index):
     Age[index] = 0
     Enabled[index] = value
 
+
+def CheckForDropouts(old_health, new_health):
+    # Any freshly dropping out BPMs trigger a stop of fast feedback.
+    dropouts = (new_health == 2) > (old_health == 2)
+    if dropouts.any():
+        dropout_list = list(nonzero(dropouts)[0])
+        print 'Stopping fast feedback:', dropout_list, 'dropped out' 
+        stop_pvs = ['SR%02dA-CS-FOFB-01:FASTART' % (c+1) for c in range(24)]
+        catools.caput(stop_pvs, 1, throw = False)
+    
     
 def TimerTick():
     # Age all the non responding entries and identify those which have passed
@@ -53,6 +65,8 @@ def TimerTick():
     #   0 => enabled and operating normally
     NewHealth = where(Aged, 2, 1 - Enabled)
     if (NewHealth != Health.get()).any():
+        CheckForDropouts(Health.get(), NewHealth)
+        
         Health.set(NewHealth)
         global EnabledList
         EnabledList = nonzero(NewHealth == 0)
@@ -60,7 +74,13 @@ def TimerTick():
     # Count the three possible health states
     EnabledCount    .set(size(nonzero(NewHealth == 0)))
     DisabledCount   .set(size(nonzero(NewHealth == 1)))
-    UnreachableCount.set(size(nonzero(NewHealth == 2)))
+    
+    unreachable = size(nonzero(NewHealth == 2))
+    if unreachable:
+        unreachable_severity = alarm.MAJOR_ALARM
+    else:
+        unreachable_severity = alarm.NO_ALARM
+    UnreachableCount.set(unreachable, severity = unreachable_severity)
 
 
 class PositionWaveform(MonitorWaveform):

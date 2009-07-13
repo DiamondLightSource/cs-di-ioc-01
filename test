@@ -1,6 +1,6 @@
 #!/bin/sh
 
-. ~/bin/epics.version 14.8 2>/dev/null
+. /dls_sw/etc/profile
 
 
 # Simple script to run the edm shell with PVs only fetched from a locally
