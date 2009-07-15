@@ -16,9 +16,9 @@ class AutoCurrent:
         self.dcct   = monitor.MonitorValue('SR-DI-DCCT-01:SIGNAL')
         self.scales = monitor.MonitorValue(monitor.BPMpvs('CF:ISCALE_S'))
         self.iir_k  = builder.aOut('ISCALE_K', 0, 1,
-            initial_value = config.SCALING_K)
+            initial_value = config.ISCALE_SCALING_K)
         self.threshold = builder.aOut('ISCALE_MIN', 0, 250,
-            initial_value = config.DCCT_THRESHOLD)
+            initial_value = config.ISCALE_DCCT_THRESHOLD)
         
         self.timer = cothread.Timer(interval, self.Timer, retrigger=True)
         builder.aOut('ISCALE_INTERVAL', 0, 120,
@@ -42,7 +42,7 @@ class AutoCurrent:
 
             # Only adjust BPMs for which the ratio between observed and true
             # current is within a sensible range, say +- 10%
-            current_ratio = currents / dcct
+            current_ratio = dcct / currents
             sane_currents = (0.9 < current_ratio) & (current_ratio < 1.1)
             
             new_scales = scales * current_ratio
@@ -56,4 +56,4 @@ class AutoCurrent:
                     pvs, iir_scales[sane_currents], throw = False)
 
 
-AutoCurrent(config.TIMER_INTERVAL)
+AutoCurrent(config.ISCALE_TIMER_INTERVAL)

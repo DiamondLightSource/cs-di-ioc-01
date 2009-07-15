@@ -45,7 +45,7 @@ def CheckForDropouts(old_health, new_health):
         dropout_list = list(nonzero(dropouts)[0])
         print 'Stopping fast feedback:', dropout_list, 'dropped out' 
         stop_pvs = ['SR%02dA-CS-FOFB-01:FASTART' % (c+1) for c in range(24)]
-        catools.caput(stop_pvs, 1, throw = False)
+        catools.caput(stop_pvs, 0, throw = False)
     
     
 def TimerTick():

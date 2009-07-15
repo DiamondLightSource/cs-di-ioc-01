@@ -104,7 +104,7 @@ class MonitorWaveform:
     def __init__(self,
             name, server_name=None, tick=0.2, datatype=None,
             default_value=None,
-            on_update=None, timestamps=False):
+            on_update=None, timestamps=False, offset=None):
 
         if server_name is None:     server_name = name
         if default_value is None:   default_value = 0
@@ -112,6 +112,7 @@ class MonitorWaveform:
         self.name = name
         self.default_value = default_value
         self.on_update = on_update
+        self.offset = offset
 
         # We maintain two copies of the reported values: the values actually
         # received from the BPM, and the value reported to the IOC server.
@@ -146,6 +147,8 @@ class MonitorWaveform:
         import enabled
         new_value = enabled.WaveformDefaults(
             self.raw_value, self.default_value)
+        if self.offset:
+            new_value -= self.offset
         
         changed = (new_value != self.masked_value).any()
         if changed:
