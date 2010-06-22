@@ -2,7 +2,7 @@
 
 '''Diagnostics Storage Ring EBPM Concentrator.'''
 
-import sys
+import sys, os
 DEBUG = 'D' in sys.argv[1:]
 if DEBUG:
     print 'Running in debug mode'
@@ -20,6 +20,11 @@ else:
     print require('iocbuilder==1.7')
 
 import builder
+
+# A couple of identification PVs
+builder.SetDeviceName('CS-DI-IOC-01')
+builder.stringIn('WHOAMI', VAL = 'EBPM Concentrator')
+builder.stringIn('HOSTNAME', VAL = os.uname()[1])
 
 builder.SetDeviceName('SR-DI-EBPM-01')
 
