@@ -15,9 +15,9 @@ if DEBUG:
     cothread.Timer(1, Log, retrigger = True)
 else:
     from pkg_resources import require
-    print require('numpy==1.1.0')
-    print require('cothread==1.14')
-    print require('iocbuilder==1.7')
+#     print require('numpy==1.1.0')
+    print require('cothread==1.16')
+    print require('iocbuilder==3.0')
 
 import builder
 
