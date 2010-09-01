@@ -85,8 +85,8 @@ class Updater:
 
     def WriteNewValue(self, value):
         self.monitor.UpdateDefault(value)
-        CaPutAll(self.name + '_S', value)
         self.writer.set(value)
+        CaPutAll(self.name + '_S', value)
 
     def Update(self, changed):
         self.at_target = (

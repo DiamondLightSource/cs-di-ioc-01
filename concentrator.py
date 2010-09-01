@@ -1,5 +1,3 @@
-#!/usr/bin/env python2.4
-
 '''Diagnostics Storage Ring EBPM Concentrator.'''
 
 import sys, os

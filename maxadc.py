@@ -46,7 +46,7 @@ class MaxADC(MonitorWaveform):
 class CurrentWaveform:
     def __init__(self):
         invalid_bpms = [7*(c-1) + n-1 for c, n in config.BPMS_no_current]
-        self.valid = numpy.ones(168, dtype=bool)
+        self.valid = numpy.ones(BPM_count, dtype=bool)
         self.valid[invalid_bpms] = False
         
         self.waveform = MonitorSimpleWaveform('SA:CURRENT',
@@ -68,8 +68,7 @@ class CurrentWaveform:
 MaxADC()
 
 builder.WaveformIn('SPOS', BpmPositions)
-builder.WaveformIn('BPMID',
-    [1.1+i+0.1*j for i in range(24) for j in range(7)])
+builder.WaveformIn('BPMID', BPM_ids)
 
 current = CurrentWaveform()
 

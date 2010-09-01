@@ -8,13 +8,34 @@ from cothread import catools
 __all__ = ['CaPutAll',
     'MonitorArray', 'MonitorValue',
     'MonitorWaveform', 'MonitorSimpleWaveform',
-    'BPM_count', 'BPMS']
+    'BPM_count', 'BPMS', 'BPM_ids']
 
 
+def flatten(ll):
+    '''Flattens a list of lists into a single list.'''
+    return [x for l in ll for x in l]
 
-# List of all BPMs in the storage ring.
-BPMS = ['SR%02dC-DI-EBPM-%02d' % (c+1, n+1)
-    for c in range(24) for n in range(7)]
+def make_bpms(straight, cell):
+    return flatten([
+        [straight(c+1, n+1) for n in range(2) if c+1 in straights] + 
+        [cell(c+1, n+1) for n in range(7)]
+        for c in range(24)])
+
+# List of all BPMs in the storage ring.  This is slightly tricky as we alternate
+# straights and arcs, but we only have a limited number of straights
+straights = [13]        # Expect straights 9 and 10 later on
+
+BPMS = make_bpms(
+    lambda c, n: 'SR%02dS-DI-EBPM-%02d' % (c, n),
+    lambda c, n: 'SR%02dC-DI-EBPM-%02d' % (c, n))
+# For display convenience we assign to each BPM an ID of the form c.n for arc
+# BPMs (c 1 to 24, n 1 to 7).  To the two straights we assign ids (c-1).9 and
+# c.0, eg 9.9 and 10.0 for SR10S, to ensure they appear in the right visual
+# location.
+BPM_ids = make_bpms(
+    lambda c, n: c - 0.2 + 0.1*n,
+    lambda c, n: c + 0.1*n)
+
 BPM_count = len(BPMS)
 
 # Converts a BPM specific PV into one PV per BPM.
@@ -26,13 +47,15 @@ def BPMpvs(name):
 def CaPutAll(pv, value):
     '''Writes a value to all PVs.  The write process is spawned in the
     background to avoid blocking any other activites.'''
-    ok = catools.caput(BPMpvs(pv), value, throw = False)
-    if not numpy.all(ok):
-        print 'caput failed:'
-        for result in ok:
-            if not result:
-                print '   ', result.name, '-', str(result)
-                break       # for the moment...
+    def put_task():
+        ok = catools.caput(BPMpvs(pv), value, throw = False)
+        if not numpy.all(ok):
+            print 'caput failed:'
+            for result in ok:
+                if not result:
+                    print '   ', result.name, '-', str(result)
+                    break       # for the moment...
+    cothread.Spawn(put_task)
 
 
 def MonitorArray(name, callback, datatype=None, timestamps = False):
@@ -166,6 +189,7 @@ class MonitorWaveform:
     def active_value(self):
         '''Returns the subset of "active" values: rather than defaulting
         disabled values, in this version they are removed from the array.
-        This means that the active_value array may be any length <= 168.'''
+        This means that the active_value array may be any length <= 
+        BPM_count.'''
         import enabled
         return enabled.ActiveArray(self.raw_value)
