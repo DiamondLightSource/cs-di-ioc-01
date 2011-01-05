@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PYIOC_VERSION=1-4
+PYIOC_VERSION=2-0
 PYIOC=/dls_sw/prod/R3.14.11/support/pythonSoftIoc/$PYIOC_VERSION/pythonIoc
 
 export EPICS_CA_MAX_ARRAY_BYTES=1000000
@@ -9,4 +9,4 @@ export EPICS_CAS_SERVER_PORT=6064
 arg1="${1:-C}"      # By default use development configuration file
 
 cd "$(dirname "$0")"
-$PYIOC concentrator.py "$arg1"
+exec $PYIOC concentrator.py "$arg1"

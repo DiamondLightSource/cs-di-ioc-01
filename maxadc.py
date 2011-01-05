@@ -1,6 +1,6 @@
 import numpy
 
-import builder
+from softioc import builder
 
 from monitor import *
 from positions import BpmPositions

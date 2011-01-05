@@ -1,5 +1,5 @@
 import numpy
-import builder
+from softioc import builder
 from monitor import *
 
 class InterlockReason: #(MonitorWaveform):

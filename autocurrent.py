@@ -1,6 +1,6 @@
 '''Automatic current scaling.  Monitors the beam current reported by each
 '''
-import builder
+from softioc import builder
 
 import cothread
 from cothread import catools

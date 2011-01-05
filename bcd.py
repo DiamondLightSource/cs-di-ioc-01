@@ -4,7 +4,7 @@ import os.path
 import numpy
 
 import cothread
-import builder
+from softioc import builder
 
 from config import *
 from monitor import *

@@ -3,8 +3,7 @@ aggregating the result into a set of global health monitoring PVs.'''
 
 from numpy import *
 
-import alarm
-import builder
+from softioc import builder, alarm
 import cothread
 from cothread import catools
 

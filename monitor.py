@@ -1,6 +1,6 @@
 import numpy
 
-import builder
+from softioc import builder
 import cothread
 
 from cothread import catools 

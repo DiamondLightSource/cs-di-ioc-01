@@ -3,7 +3,7 @@
 import numpy
 
 import cothread
-import builder
+from softioc import builder
 
 from monitor import *
 

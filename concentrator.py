@@ -13,10 +13,10 @@ if DEBUG:
     cothread.Timer(1, Log, retrigger = True)
 else:
     from pkg_resources import require
-    print require('cothread==1.16')
-    print require('iocbuilder==3.0')
+    require('cothread==1.17')
+    require('iocbuilder==3.6')
 
-import builder
+from softioc import builder, softioc
 
 # A couple of identification PVs
 builder.SetDeviceName('CS-DI-IOC-01')
@@ -32,9 +32,6 @@ import maxadc
 import interlock
 import autocurrent
 
-
-from softioc import *
-
 builder.LoadDatabase()
-iocInit()
-interactive_ioc(globals())
+softioc.iocInit()
+softioc.interactive_ioc(globals())
