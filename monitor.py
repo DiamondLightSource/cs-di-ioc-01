@@ -23,7 +23,7 @@ def make_bpms(straight, cell):
 
 # List of all BPMs in the storage ring.  This is slightly tricky as we alternate
 # straights and arcs, but we only have a limited number of straights
-straights = [13]        # Expect straights 9 and 10 later on
+straights = [9, 13]        # Expect straight 10 later on
 
 BPMS = make_bpms(
     lambda c, n: 'SR%02dS-DI-EBPM-%02d' % (c, n),
