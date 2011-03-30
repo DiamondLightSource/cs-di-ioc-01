@@ -7,6 +7,7 @@ from softioc import builder, alarm
 import cothread
 from cothread import catools
 
+from bpm_list import *
 from monitor import *
 
 

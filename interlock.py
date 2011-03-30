@@ -1,5 +1,6 @@
 import numpy
 from softioc import builder
+from bpm_list import *
 from monitor import *
 
 class InterlockReason: #(MonitorWaveform):

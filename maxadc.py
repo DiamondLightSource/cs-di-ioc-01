@@ -2,8 +2,8 @@ import numpy
 
 from softioc import builder
 
+from bpm_list import *
 from monitor import *
-from positions import BpmPositions
 import enabled
 import bcd
 import config
@@ -45,7 +45,7 @@ class MaxADC(MonitorWaveform):
 
 class CurrentWaveform:
     def __init__(self):
-        invalid_bpms = [7*(c-1) + n-1 for c, n in config.BPMS_no_current]
+        invalid_bpms = [BPM_list.index(bpm) for bpm in config.BPMS_no_current]
         self.valid = numpy.ones(BPM_count, dtype=bool)
         self.valid[invalid_bpms] = False
         
@@ -67,7 +67,6 @@ class CurrentWaveform:
 
 MaxADC()
 
-builder.WaveformIn('SPOS', BpmPositions)
 builder.WaveformIn('BPMID', BPM_ids)
 
 current = CurrentWaveform()

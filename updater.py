@@ -5,6 +5,7 @@ import numpy
 import cothread
 from softioc import builder
 
+from bpm_list import *
 from monitor import *
 
 

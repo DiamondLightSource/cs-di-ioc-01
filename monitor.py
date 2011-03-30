@@ -3,40 +3,16 @@ import numpy
 from softioc import builder
 import cothread
 
-from cothread import catools 
+from cothread import catools
+
+from bpm_list import *
+
 
 __all__ = ['CaPutAll',
     'MonitorArray', 'MonitorValue',
-    'MonitorWaveform', 'MonitorSimpleWaveform',
-    'BPM_count', 'BPMS', 'BPM_ids']
+    'MonitorWaveform', 'MonitorSimpleWaveform']
 
 
-def flatten(ll):
-    '''Flattens a list of lists into a single list.'''
-    return [x for l in ll for x in l]
-
-def make_bpms(straight, cell):
-    return flatten([
-        [straight(c+1, n+1) for n in range(2) if c+1 in straights] + 
-        [cell(c+1, n+1) for n in range(7)]
-        for c in range(24)])
-
-# List of all BPMs in the storage ring.  This is slightly tricky as we alternate
-# straights and arcs, but we only have a limited number of straights
-straights = [9, 13]        # Expect straight 10 later on
-
-BPMS = make_bpms(
-    lambda c, n: 'SR%02dS-DI-EBPM-%02d' % (c, n),
-    lambda c, n: 'SR%02dC-DI-EBPM-%02d' % (c, n))
-# For display convenience we assign to each BPM an ID of the form c.n for arc
-# BPMs (c 1 to 24, n 1 to 7).  To the two straights we assign ids (c-1).9 and
-# c.0, eg 9.9 and 10.0 for SR10S, to ensure they appear in the right visual
-# location.
-BPM_ids = make_bpms(
-    lambda c, n: c - 0.2 + 0.1*n,
-    lambda c, n: c + 0.1*n)
-
-BPM_count = len(BPMS)
 
 # Converts a BPM specific PV into one PV per BPM.
 def BPMpvs(name):

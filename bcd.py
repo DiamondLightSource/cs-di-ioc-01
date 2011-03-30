@@ -7,6 +7,7 @@ import cothread
 from softioc import builder
 
 from config import *
+from bpm_list import *
 from monitor import *
 from updater import *
 
