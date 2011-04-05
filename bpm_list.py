@@ -50,5 +50,8 @@ BPMS = [bpm for id, bpm in BPM_list]
 BPM_count = len(BPMS)
 BPM_ids = map(make_bpm_id, BPMS)
 
+# Mapping from BPM name to BPM id
+BPM_name_id = dict((bpm, id) for id, bpm in BPM_list)
 
-__all__ = ['BPM_count', 'BPMS', 'BPM_ids']
+
+__all__ = ['BPM_count', 'BPMS', 'BPM_ids', 'BPM_name_id']
