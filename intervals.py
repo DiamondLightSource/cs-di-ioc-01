@@ -34,7 +34,7 @@ class ControllerBase(autosuper):
 
     def __init__(self,
             delay, initial_delay, values, on_update, history_length,
-            finish_early):
+            finish_early = True):
         self.delay = 1e-3 * delay
         self.length = len(values)
         self.values, shifts = zip(*values)
@@ -74,7 +74,8 @@ class ControllerBase(autosuper):
         # for the next interval.
         origin = self._compute_origin(timestamps, valid)
 
-        self.on_update(values, valid, origin, timestamps, arrivals)
+        if self.on_update:
+            self.on_update(values, valid, origin, timestamps, arrivals)
 
         self.value_ready[:] = False
         for value in self.values:
@@ -84,7 +85,7 @@ class ControllerBase(autosuper):
 class IntervalController(ControllerBase):
     '''Specifies a controller of synchronously updating values.'''
 
-    def __init__(self, interval, delay, values, on_update,
+    def __init__(self, interval, delay, values, on_update = None,
             history_length = 2, adjust_iir = 0.5, finish_early = True):
         '''IntervalController(interval, values, ...)
 
@@ -141,12 +142,12 @@ class IntervalController(ControllerBase):
         return origin
 
 
-class TriggerController(ControllerBase):
+class TriggeredController(ControllerBase):
     '''Used to gather data from a common trigger but without any predictable
     repetition interval.'''
 
-    def __init__(self, delay, values, on_update):
-        self.__super.__init__(delay, None, values, on_update, 1)
+    def __init__(self, delay, values, on_update = None, finish_early = True):
+        self.__super.__init__(delay, None, values, on_update, 1, finish_early)
         self.active = False
 
     def _get_interval(self, index, timestamp):
@@ -400,18 +401,27 @@ class Waveform_PV(Waveform):
         self.update(value.timestamp, value, index)
 
 
-# ------------------------------------------------------------------------------
-# Waveform publishing helper classes
+class Waveform_Out(Waveform_PV):
+    '''Simple waveform with associated timestamps.'''
 
-class Waveform_Out:
-    '''Simple waveform.'''
+    def __init__(self, name, pvs, datatype = None, **kargs):
+        self.__super.__init__(name, pvs, **kargs)
 
-    def __init__(self, name, length, datatype = None):
+        length = len(pvs)
         self.pv = builder.Waveform(
             name, length = length, datatype = datatype, TSE = -2)
+        self.ts_pv  = builder.Waveform(
+            '%s:TS' % name,  length = length, EGU = 'ms', TSE = -2)
+        self.age_pv = builder.Waveform(
+            '%s:AGE' % name, length = length, EGU = 'ms', TSE = -2)
 
     def on_update(self, value):
-        self.pv.set(value.value, timestamp = value.timestamp)
+        self.__super.on_update(value)
+
+        ts = value.timestamp
+        self.pv.set(value.value, timestamp = ts)
+        self.ts_pv .set(1e3 * (value.timestamp_wf - ts), timestamp = ts)
+        self.age_pv.set(1e3 * (value.arrival_wf - ts),   timestamp = ts)
 
 
 class MaskedWaveform(Waveform_PV):
@@ -442,22 +452,6 @@ class MaskedWaveform(Waveform_PV):
 
         self.wf_ts.on_update(value)
         self.__super.on_update(value)
-
-
-
-class Waveform_TS:
-    '''Relative timestamp and age waveforms.'''
-
-    def __init__(self, ts_name, age_name, length):
-        self.ts_pv  = builder.Waveform(
-            ts_name,  length = length, EGU = 'ms', TSE = -2)
-        self.age_pv = builder.Waveform(
-            age_name, length = length, EGU = 'ms', TSE = -2)
-
-    def on_update(self, value):
-        ts = value.timestamp
-        self.ts_pv .set(1e3 * (value.timestamp_wf - ts), timestamp = ts)
-        self.age_pv.set(1e3 * (value.arrival_wf - ts),   timestamp = ts)
 
 
 class Waveform_Mean:

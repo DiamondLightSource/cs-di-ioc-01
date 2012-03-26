@@ -13,33 +13,29 @@ SR_BUNCHES = 936        # 561.6 m
 SR_MA_TO_NC = 1e6 * SR_BUNCHES / F_RF       # 1.87 us (534 kHz)
 
 
-class MS_Waveform(intervals.Waveform_PV):
+class MS_Waveform(intervals.Waveform_Out):
     ms_pvs = ['%s:MS:DELTAI' % bpm for bpm in bpm_list.BPMS]
 
     def __init__(self):
         self.__super.__init__('MS:DELTAI', self.ms_pvs)
-
-        length = len(self.ms_pvs)
-        self.wf_out = intervals.Waveform_Out('MS:DELTAI', length)
-        self.wf_ts = intervals.Waveform_TS(
-            'MS:DELTAI:TS', 'MS:DELTAI:AGE', length)
         self.mean_pv = intervals.Waveform_Mean('MS:DELTAI:MEAN')
 
     def on_update(self, value):
-        self.wf_out.on_update(value)
-        self.wf_ts.on_update(value)
-        self.mean_pv.on_update(value)
-
         self.__super.on_update(value)
+        self.mean_pv.on_update(value)
 
 
 class TransferRatio:
     '''Manages transfer ratio for a single pair of values.'''
 
-    def __init__(self, name, input, output):
+    def __init__(self, name, input, output, low, lolo = None):
         self.name = name
         self.input = input
         self.output = output
+        self.low = low
+        if lolo is None:
+            lolo = 0.5 * low
+        self.lolo = lolo
         self.pv = builder.aIn(name, 0, 100, PREC = 2, EGU = '%', TSE = -2)
 
     def on_update(self, timestamp, values, valid):
@@ -48,9 +44,16 @@ class TransferRatio:
             output = values[self.output]
             if input > 0.05:
                 xfer = 100. * output / input
+                if xfer > self.low:
+                    severity = 0
+                elif xfer > self.lolo:
+                    severity = 1
+                else:
+                    severity = 2
             else:
                 xfer = 0
-            self.pv.set(xfer, timestamp = timestamp)
+                severity = 0
+            self.pv.set(xfer, timestamp = timestamp, severity = severity)
 
 
 class History:
@@ -130,15 +133,24 @@ class Transfer:
         #   BR DCCT     3       BS ICT 01   4       BS ICT 02   5
         #   SR DCCT     6       MS          7
         self.transfers = [
-            TransferRatio('LB-01-02', 0, 1),
-            TransferRatio('LB-02-03', 1, 2),  TransferRatio('LI-LB-03', 0, 2),
-            TransferRatio('LB-03-BR', 2, 3),  TransferRatio('LI-BR',    0, 3),
-            TransferRatio('BR-BS-01', 3, 4),  TransferRatio('LI-BS-01', 0, 4),
-            TransferRatio('BS-01-02', 4, 5),  TransferRatio('LI-BS-02', 0, 5),
-            TransferRatio('BS-SR',    5, 6),  TransferRatio('LI-SR',    0, 6),
-            TransferRatio('BR-SR',    3, 6),
-            TransferRatio('BS-MS',    5, 7),  TransferRatio('LI-MS',    0, 7),
-            TransferRatio('BR-MS',    3, 7)]
+            # Incremental transfers
+            TransferRatio('LB-01-02', 0, 1, 80),
+            TransferRatio('LB-02-03', 1, 2, 80),
+            TransferRatio('LB-03-BR', 2, 3, 50),
+            TransferRatio('BR-BS-01', 3, 4, 80),
+            TransferRatio('BS-01-02', 4, 5, 80),
+            TransferRatio('BS-SR',    5, 6, 60),
+            TransferRatio('BS-MS',    5, 7, 60),
+            # Compound transfers from LB-01
+            TransferRatio('LI-LB-03', 0, 2, 64),
+            TransferRatio('LI-BR',    0, 3, 32),
+            TransferRatio('LI-BS-01', 0, 4, 26),
+            TransferRatio('LI-BS-02', 0, 5, 20),
+            TransferRatio('LI-SR',    0, 6, 12),
+            TransferRatio('LI-MS',    0, 7, 12),
+            # Transfers from BR
+            TransferRatio('BR-SR',    3, 6, 38),
+            TransferRatio('BR-MS',    3, 7, 38)]
 
         # Historical waveforms for booster and BTS-02 for 10 seconds, calculated
         # using offsets above
@@ -148,11 +160,15 @@ class Transfer:
 
         # Transfer efficiencies calculated as offsets into histories above
         self.transfers_2s = [
-            TransferRatio('BR-SR2', 0, 2),     TransferRatio('BS-SR2', 1, 2),
-            TransferRatio('BR-MS2', 0, 3),     TransferRatio('BS-MS2', 1, 3)]
+            TransferRatio('BR-SR2', 0, 2, 38),      # 3 -> 6
+            TransferRatio('BS-SR2', 1, 2, 60),      # 5 -> 6
+            TransferRatio('BR-MS2', 0, 3, 38),      # 3 -> 7
+            TransferRatio('BS-MS2', 1, 3, 60)]      # 5 -> 7
         self.transfers_10s = [
-            TransferRatio('BR-SR10', 0, 2),    TransferRatio('BS-SR10', 1, 2),
-            TransferRatio('BR-MS10', 0, 3),    TransferRatio('BS-MS10', 1, 3)]
+            TransferRatio('BR-SR10', 0, 2, 38),
+            TransferRatio('BS-SR10', 1, 2, 60),
+            TransferRatio('BR-MS10', 0, 3, 38),
+            TransferRatio('BS-MS10', 1, 3, 60)]
 
 
     def compute_ms_charge(self, values, valid, timestamps):

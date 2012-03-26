@@ -1,0 +1,74 @@
+Files
+-----
+
+autocurrent.py
+    Monitors and updates CF:ISCALE_S to keep EBPM signal in step with DCCT
+    signal.
+
+autosuper.py
+    Lifted from iocbuilder/support.py, but probably not really wanted.
+
+bcd.py
+    No longer manages BCD (so a misnomer), but implements autogain.  Probably
+    want to rename to autogain.py.
+
+booster.py
+    Some initial ideas for booster concentrator PVs, probably want to put all
+    the booster PVs here.
+
+bpm_list.py
+    Loads list of SR BPMs from BPM list file.
+
+concentrator.py
+    Top level startup script, configures imports, loads remaining components,
+    runs interactive IOC shell.
+
+config.py
+    Loads configuration file.
+
+enabled.py
+    Monitors SA positions and ENABLED flags, computes health waveform by taking
+    missed updates into account.
+
+injection.py
+    New transfer efficiency calculations.
+
+interlock.py
+    Now cut to the bone, can be merged and dropped.
+
+intervals.py
+    Complex code for gathering distributed updates into common intervals.  New
+    to this release, designed to be used throughout concentrator, needs a bit of
+    cleaning.
+
+maxadc.py
+    A number of distributed waveforms together with special processing for
+    SA:MAXADC.
+
+monitor.py
+    PV monitoring support, should mostly be obsoleted by intervals.py.
+
+sa_waveforms.py
+    An initial stab at some SA waveforms, but probably not sensible.
+
+updater.py
+    Used to manage some collections of updating waveforms.
+
+waveforms.py
+    Another random stab like sa_waveforms.py.
+
+
+Concentrated waveforms
+----------------------
+
+FR:{STD,PP}{X,Y}    on BS-DI
+
+PM:{X,Y,ADC}_{OFL,OFFSET}   on PM
+    Need special offset on OFFSET values
+
+SA:{CURRENT,X,Y,MAXADC}     on SA
+    Need maximal severity on MAXADC
+
+CF:ISCALE_S         asynchronous
+
+{FT,FR,BN,IL}:ENABLE_S, CF:{ATTEN,AUTOSW,DETUNE}_S     asynchronous
