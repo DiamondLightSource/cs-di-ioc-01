@@ -1,35 +1,34 @@
+import numpy
 
 from softioc import builder
 import intervals
 import bpm_list
 
 
-# class MaskedWaveform(intervals.Waveform_PV):
-#     def __init__(self, name, mask, shift = 0):
-#         # The mask is a mutable value which is managed externally
-#         self.mask = mask
-# 
-#         pvs = ['%s:%s' % (bpm, name) for bpm in bpm_list.BPMS]
-#         self.__super.__init__(name, pvs, shift = shift)
-# 
-#         N = len(pvs)
-#         self.wf_raw = builder.Waveform('%s:RAW' % name, length = N)
-#         self.wf_out = intervals.Waveform_Out(name, N)
-#         self.wf_ts = intervals.Waveform_TS('%s:TS' % name, '%s:AGE' % name, N)
-# 
-#     def on_update(self, value):
-#         self.wf_raw.on_update(value)
-#         self.wf_out.on_update(value)
-#         self.wf_ts.on_update(value)
-#         self.__super.on_update(value)
 
+
+def MakeWaveforms(pvs, offset = 0):
+    return [(intervals.MaskedWaveform(
+        pv, bpm_list.BPMpvs(pv), [enabled_mask, 0], offset), 0)
+        for pv in pvs]
+
+
+enabled_mask = numpy.ones(bpm_list.BPM_count, dtype = bool)
 
 builder.SetDeviceName('SR-DI-EBPM-01')
 
-# Postmortem PVs.
-pm_pvs = [
-    'PM:X_OFL',     'PM:Y_OFL',     'PM:ADC_OFL',
-    'PM:X_OFFSET',  'PM:Y_OFFSET',  'PM:ADC_OFFSET']
+# Postmortem PVs: PM:{ADC,X,Y}_OFFSET
+#   Triggered on postmortem event.
+#   OFFSET values need to be adjusted by fudge factor before being published.
 intervals.TriggeredController(500,
-    [(intervals.Waveform_Out(pv, bpm_list.BPMpvs(pv)), 0)
-     for pv in pm_pvs])
+    MakeWaveforms([
+        'PM:X_OFFSET',  'PM:Y_OFFSET',  'PM:ADC_OFFSET'], offset = 15384))
+
+
+# SA PVs
+#   SA:{MAXADC,CURRENT,X,Y}
+#   Triggered at 10 Hz by EBPM
+sa_controller = intervals.IntervalController(101, 100,
+    MakeWaveforms(['SA:X', 'SA:Y', 'SA:MAXADC', 'SA:CURRENT']),
+    history_length = 3)
+intervals.Controller_extra('SA', sa_controller)

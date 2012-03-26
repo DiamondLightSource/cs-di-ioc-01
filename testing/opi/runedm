@@ -1,14 +1,18 @@
 #!/bin/sh
 
+cd "$(dirname "$0")"
 export EDMDATAFILES=.
+
+export EPICS_CA_SERVER_PORT=6064
+export EPICS_CA_REPEATER_PORT=6065
+
+edm -x -eolc top.edl &
+exit
+
 
 DEVICE=CS-DI-XFER-01
 WF="${1:-MS:DELTAI}"
 IC="${2:-INJECT}"
 
-export EPICS_CA_SERVER_PORT=6064
-export EPICS_CA_REPEATER_PORT=6065
-
-cd "$(dirname "$0")"
 edm -x -eolc -m "device=SR-DI-EBPM-01,wf=MS:DELTAI" waveform.edl &
 edm -x -eolc -m "device=CS-DI-XFER-01,ic=INJECT" controller.edl &
