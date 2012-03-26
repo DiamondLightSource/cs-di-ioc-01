@@ -5,6 +5,7 @@ import cothread
 from softioc import builder
 
 import intervals
+import bpm_list
 
 
 F_RF = 499654097        # 60 cm
@@ -13,15 +14,15 @@ SR_MA_TO_NC = 1e6 * SR_BUNCHES / F_RF       # 1.87 us (534 kHz)
 
 
 class MS_Waveform(intervals.Waveform_PV):
-    ms_pvs = ['SR%02dC-DI-EBPM-%02d:MS:DELTAI' % (c+1, n+1)
-        for c in range(24) for n in range(7)]
+    ms_pvs = ['%s:MS:DELTAI' % bpm for bpm in bpm_list.BPMS]
 
     def __init__(self, shift):
         self.__super.__init__('MS:DELTAI', self.ms_pvs, shift = shift)
 
-        N = len(self.ms_pvs)
-        self.wf_out = intervals.Waveform_Out('MS:DELTAI', N)
-        self.wf_ts = intervals.Waveform_TS('MS:DELTAI:TS', 'MS:DELTAI:AGE', N)
+        length = len(self.ms_pvs)
+        self.wf_out = intervals.Waveform_Out('MS:DELTAI', length)
+        self.wf_ts = intervals.Waveform_TS(
+            'MS:DELTAI:TS', 'MS:DELTAI:AGE', length)
         self.mean_pv = intervals.Waveform_Mean('MS:DELTAI:MEAN')
 
     def on_update(self, value):
@@ -91,36 +92,46 @@ class Transfer:
     acceptance = 0.5
 
     def __init__(self):
-        builder.SetDeviceName('TS-DI-TEST-01')
+        # The MS waveform is an EBPM derived waveform
+        builder.SetDeviceName('SR-DI-EBPM-01')
+        ms_wf = MS_Waveform(303.8)
+
+        # Transfer efficiency PVs.  These are all CS-DI-XFER-01 PVs
+        builder.SetDeviceName('CS-DI-XFER-01')
+
+        # We gather injection transfer data from the LB and BS ICTs, from the
+        # booster and storage ring DCCTs, and from the EBPM MS records.  The SR
+        # DCCT needs to be converted into an SR:CHARGE calculation by scaling
+        # and taking differences, and the MS values need to be scaled to compute
+        # MS:DELTAQ
         pvs = [
             intervals.Value_PV(pv, shift = shift)
-                for pv, shift in self.xfr_pvs] + [
-            MS_Waveform(303.8)
-            ]
+                for pv, shift in self.xfr_pvs] + [ms_wf]
         self.controller = intervals.Controller(
             200, pvs,
             history_length = 3, delay = 350, finish_early = True,
             acceptance = 0.5, on_update = self.on_update)
 
+        # Generate visible status PVs for the controller.
         self.extra = intervals.Controller_extra('INJECT', self.controller)
+        # This will be updated with the scaled charge from MS
         self.dq_pv = builder.aIn('MS:DELTAQ', 0, 1,
             PREC = 3, EGU = 'nC', TSE = -2)
         self.inject_pv = builder.Waveform(
             'INJECT:VALUES', numpy.zeros(len(pvs)), TSE = -2)
 
-        # Transfer efficiency PVs.  These are all CS-DI-XFER-01 PVs
-        builder.SetDeviceName('CS-DI-XFER-01')
-
+        # Storage ring delta current turned into an injection charge together
+        # with the associated control variables
         self.charge_pv = builder.aIn('SR:CHARGE', 0, 1,
             PREC = 3, EGU = 'nC', TSE = -2)
         self.last_signal_valid = False
+        self.last_signal = numpy.nan
 
-        # Historical waveforms for booster and BTS-02 for 10 seconds
-        self.histories = [
-            #          BR              BS              SR              MS
-            History(50, 3), History(50, 5), History(50, 6), History(50, 7)]
-
-        # Transfer efficiencies calculated as offsets into interval
+        # Transfer efficiencies calculated as offsets into gathered interval
+        # data using offets:
+        #   LB ICT 01   0       LB ICT 02   1       LB ICT 03   2
+        #   BR DCCT     3       BS ICT 01   4       BS ICT 02   5
+        #   SR DCCT     6       MS          7
         self.transfers = [
             TransferRatio('LB-01-02', 0, 1),
             TransferRatio('LB-02-03', 1, 2),  TransferRatio('LI-LB-03', 0, 2),
@@ -132,7 +143,13 @@ class Transfer:
             TransferRatio('BS-MS',    5, 7),  TransferRatio('LI-MS',    0, 7),
             TransferRatio('BR-MS',    3, 7)]
 
-        # Transfer efficiencies calculated as offsets into histories
+        # Historical waveforms for booster and BTS-02 for 10 seconds, calculated
+        # using offsets above
+        self.histories = [
+            #        0 BR            1 BS            2 SR            3 MS
+            History(50, 3), History(50, 5), History(50, 6), History(50, 7)]
+
+        # Transfer efficiencies calculated as offsets into histories above
         self.transfers_2s = [
             TransferRatio('BR-SR2', 0, 2),     TransferRatio('BS-SR2', 1, 2),
             TransferRatio('BR-MS2', 0, 3),     TransferRatio('BS-MS2', 1, 3)]
@@ -142,6 +159,7 @@ class Transfer:
 
 
     def compute_ms_charge(self, values, valid, timestamps):
+        '''Computes MS:DELTAQ from mean MS reading, just a matter of scaling.'''
         if valid[self.MS_CHARGE]:
             ms_charge = values[self.MS_CHARGE].mean * SR_MA_TO_NC
             self.dq_pv.set(ms_charge, timestamp = timestamps[self.MS_CHARGE])
@@ -170,6 +188,12 @@ class Transfer:
     def on_update(self, *args):
         self.extra.on_update(*args)
 
+        # For each PV in the interval we are given the following data:
+        #   values[i]   Value received during this interval for PV[i]
+        #   valid[i]    Whether data was actually received
+        #   origin      Timestamp of the baseline (injection timestamp)
+        #   timestamps[i]   Timestamps of each PV
+        #   arrivals[i] Arrival time of each PV
         values, valid, origin, timestamps, arrivals = args
 
         ms_charge, ms_charge_valid = \
@@ -188,9 +212,11 @@ class Transfer:
 
         self.inject_pv.set(values_wf, timestamp = origin)
 
+        # Compute the numerous transfer efficiencies
         for transfer in self.transfers:
             transfer.on_update(origin, values_wf, valid)
 
+        # Accumulate histories for each desired incoming value
         for history in self.histories:
             history.add(values_wf, valid)
 

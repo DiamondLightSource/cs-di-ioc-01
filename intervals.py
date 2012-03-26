@@ -26,14 +26,6 @@ from softioc import builder
 from autosuper import autosuper
 
 
-__all__ = [
-    'Controller', 'Controller_extra',
-    'Value', 'Value_PV',
-    'Waveform', 'Waveform_PV',
-    'Waveform_Out', 'Waveform_Masked',
-    'Waveform_TS', 'Waveform_Mean',
-]
-
 
 class Controller(autosuper):
     '''Specifies a controller of synchronously updating values.'''
@@ -161,6 +153,39 @@ class Controller(autosuper):
             self.__on_update(*args)
 
 
+
+class Controller_extra:
+    '''An implementation of Controller which also publishes a number of interval
+    diagnostic PVs.'''
+
+    def __init__(self, name, controller):
+        self.controller = controller
+        self.valid_pv = builder.Waveform(
+            '%s:VALID' % name, length = controller.length, datatype = bool,
+            TSE = -2)
+        self.ts_pv = builder.Waveform(
+            '%s:TS' % name, length = controller.length, TSE = -2)
+        self.age_pv = builder.Waveform(
+            '%s:AGE' % name, length = controller.length, TSE = -2)
+        self.offsets_pv = builder.Waveform(
+            '%s:OFFSETS' % name, length = controller.length, TSE = -2)
+        self.delay_pv = builder.aIn('%s:DELAY' % name, TSE = -2)
+
+    def on_update(self, *args):
+        now = time.time()
+        values, valid, origin, timestamps, arrivals = args
+        self.valid_pv.set(valid, timestamp = origin)
+        self.ts_pv.set(1e3 * (timestamps - origin), timestamp = origin)
+        self.age_pv.set(1e3 * (arrivals - origin), timestamp = origin)
+        self.offsets_pv.set(
+            1e3 * self.controller.origin_offsets, timestamp = origin)
+        self.delay_pv.set(1e3 * (now - origin), timestamp = origin)
+
+
+
+# ------------------------------------------------------------------------------
+# ValueBase
+
 class ValueBase(autosuper):
     def __init__(self, name, factory, shift = 0, on_update = None):
         self.name = name
@@ -275,10 +300,10 @@ class UpdateWaveform:
     def __init__(self, length, validate = None):
         if validate is not None:
             self.validate = validate
-        self.value = numpy.zeros(length)
-        self.arrival_wf = numpy.zeros(length)
-        self.timestamp_wf = numpy.zeros(length)
-        self.valid_wf = numpy.zeros(length, dtype = bool)
+        self.value        = numpy.zeros(length) + numpy.nan
+        self.arrival_wf   = numpy.zeros(length) + numpy.nan
+        self.timestamp_wf = numpy.zeros(length) + numpy.nan
+        self.valid_wf     = numpy.zeros(length, dtype = bool)
         self.valid = False
         self.arrival = numpy.nan
         self.timestamp = numpy.nan
@@ -342,29 +367,51 @@ class Waveform_Out:
 
     def __init__(self, name, length, datatype = None):
         self.pv = builder.Waveform(
-            name, numpy.zeros(length), datatype = datatype, TSE = -2)
+            name, length = length, datatype = datatype, TSE = -2)
 
     def on_update(self, value):
         self.pv.set(value.value, timestamp = value.timestamp)
 
 
-class Waveform_Masked(Waveform):
-    def __init__(self, name, length, datatype = None):
-        z = numpy.zeros(self.length)
-        self.masked_pv = builder.Waveform(
-            name, numpy.zeros(length), datatype = datatype, TSE = -2)
+class MaskedWaveform(Waveform_PV):
+    def __init__(self, name, mask, default = 0, shift = 0):
+        # The mask is a mutable value which is managed externally
+        self.mask = mask
+        self.default = default
+
+        pvs = ['%s:%s' % (bpm, name) for bpm in bpm_list.BPMS]
+        self.__super.__init__(name, pvs, shift = shift)
+
+        length = len(pvs)
+        self.wf_raw = builder.Waveform(
+            '%s:RAW' % name, length = length, TSE = -2)
+        self.wf_out = builder.Waveform(name, length = length, TSE = -2)
+        self.wf_ts = intervals.Waveform_TS(
+            '%s:TS' % name, '%s:AGE' % name, length)
+
+    def set_default(self, default):
+        self.default = default
 
     def on_update(self, value):
-        self.masked_pv.set(value.value, timestamp = value.timestamp)
+        ts = value.timestamp
+        wf = value.value
+        self.masked_value = numpy.where(self.mask, wf, self.default)
+        self.wf_raw.set(wf, timestamp = ts)
+        self.wf_out.set(self.masked_value, timestamp = ts)
+
+        self.wf_ts.on_update(value)
+        self.__super.on_update(value)
+
 
 
 class Waveform_TS:
     '''Relative timestamp and age waveforms.'''
 
     def __init__(self, ts_name, age_name, length):
-        z = numpy.zeros(length)
-        self.ts_pv  = builder.Waveform(ts_name,  +z, EGU = 'ms', TSE = -2)
-        self.age_pv = builder.Waveform(age_name, +z, EGU = 'ms', TSE = -2)
+        self.ts_pv  = builder.Waveform(
+            ts_name,  length = length, EGU = 'ms', TSE = -2)
+        self.age_pv = builder.Waveform(
+            age_name, length = length, EGU = 'ms', TSE = -2)
 
     def on_update(self, value):
         ts = value.timestamp
@@ -381,29 +428,3 @@ class Waveform_Mean:
     def on_update(self, value):
         value.mean = numpy.mean(value.value[value.valid_wf])
         self.mean_pv.set(value.mean, timestamp = value.timestamp)
-
-
-
-class Controller_extra:
-    '''An implementation of Controller which also publishes a number of interval
-    diagnostic PVs.'''
-
-    def __init__(self, name, controller):
-        self.controller = controller
-        z = numpy.zeros(controller.length)
-        self.valid_pv = builder.Waveform(
-            '%s:VALID' % name, +z, datatype = bool, TSE = -2)
-        self.ts_pv = builder.Waveform('%s:TS' % name, +z, TSE = -2)
-        self.age_pv = builder.Waveform('%s:AGE' % name, +z, TSE = -2)
-        self.offsets_pv = builder.Waveform('%s:OFFSETS' % name, +z, TSE = -2)
-        self.delay_pv = builder.aIn('%s:DELAY' % name, TSE = -2)
-
-    def on_update(self, *args):
-        now = time.time()
-        values, valid, origin, timestamps, arrivals = args
-        self.valid_pv.set(valid, timestamp = origin)
-        self.ts_pv.set(1e3 * (timestamps - origin), timestamp = origin)
-        self.age_pv.set(1e3 * (arrivals - origin), timestamp = origin)
-        self.offsets_pv.set(
-            1e3 * self.controller.origin_offsets, timestamp = origin)
-        self.delay_pv.set(1e3 * (now - origin), timestamp = origin)
