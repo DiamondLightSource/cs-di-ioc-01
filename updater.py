@@ -37,14 +37,15 @@ class Updater:
     '''
 
     def __init__(self,
-            name, enums=(), min=0, max=1, waveform=False,
+            name, enums = (), min = 0, max = 1, waveform = False,
+            monitor = MonitorWaveform, caputall = CaPutAll,
             auto_set = True, **extras):
 
         assert not (enums and waveform), 'Can\'t specify waveform of enums'
         writer_name = name + '_S'
 
-        self.monitor = MonitorWaveform(
-            name + '_S', name, on_update = self.Update)
+        self.caputall = caputall
+        self.monitor = monitor(writer_name, name, on_update = self.Update)
 
         if enums:
             min = 0
@@ -54,10 +55,11 @@ class Updater:
         self.min = min
         self.max = max
         self.at_target = False
+        self.length = self.monitor.length
 
         if waveform:
             self.writer = builder.WaveformOut(
-                writer_name, initial_value = numpy.zeros(BPM_count),
+                writer_name, initial_value = numpy.zeros(self.length),
                 on_update = self.WriteNewValue, validate = self.Validate,
                 **extras)
         elif enums:
@@ -82,7 +84,7 @@ class Updater:
         if numpy.amin(value) < self.min or self.max < numpy.amax(value):
             print pv.name, 'invalid value:', value
             return False
-        elif self.waveform and numpy.shape(value) != (BPM_count,):
+        elif self.waveform and numpy.shape(value) != (self.length,):
             # Check waveform is exactly the right size
             print pv.name, 'wrong array size:', numpy.shape(value)
             return False
@@ -93,7 +95,7 @@ class Updater:
     def WriteNewValue(self, value):
         self.monitor.UpdateDefault(value)
         self.writer.set(value)
-        CaPutAll(self.name + '_S', value)
+        self.caputall(self.name + '_S', value)
 
     def Update(self, changed):
         self.at_target = (

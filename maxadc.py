@@ -55,7 +55,7 @@ class CurrentWaveform:
         self.mean = builder.aIn('SA:CURRENT:MEAN',
             0, 500, EGU = 'mA', PREC = 3)
 
-    def Update(self):
+    def Update(self, changed):
         # Select only the BPMs which are health and marked as valid.
         active = (enabled.Health.get() == 0) & self.valid
         values = self.waveform.value[active]

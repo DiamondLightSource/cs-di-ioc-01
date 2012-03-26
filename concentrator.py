@@ -23,6 +23,7 @@ import maxadc
 import interlock
 import autocurrent
 import injection
+import booster
 
 builder.LoadDatabase()
 softioc.iocInit()

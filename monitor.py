@@ -20,11 +20,11 @@ def BPMpvs(name):
 
 
 
-def CaPutAll(pv, value):
+def CaPutAll(pv, value, make_pvs = BPMpvs):
     '''Writes a value to all PVs.  The write process is spawned in the
     background to avoid blocking any other activites.'''
     def put_task():
-        ok = catools.caput(BPMpvs(pv), value, throw = False)
+        ok = catools.caput(make_pvs(pv), value, throw = False)
         if not numpy.all(ok):
             print 'caput failed:'
             for result in ok:
@@ -64,6 +64,8 @@ class MonitorValue:
 
 
 class MonitorSimpleWaveform:
+    MonitorArray = staticmethod(MonitorArray)
+
     def __init__(self,
             name, server_name=None, tick=0.2, datatype=None,
             on_update=None, timestamps=False):
@@ -72,13 +74,14 @@ class MonitorSimpleWaveform:
             server_name = name
 
         self.on_update = on_update
+        monitors = self.MonitorArray(name, self.MonitorCallback,
+            datatype = datatype, timestamps = timestamps)
+        self.length = len(monitors)
 
-        self.value = numpy.zeros(BPM_count, dtype = datatype)
+        self.value = numpy.zeros(self.length, dtype = datatype)
         self.waveform = builder.Waveform(
             server_name, +self.value, datatype = datatype)
 
-        MonitorArray(name, self.MonitorCallback,
-            datatype = datatype, timestamps = timestamps)
         cothread.Timer(tick, self.Update, retrigger=True)
 
     def MonitorCallback(self, value, index):
@@ -91,7 +94,15 @@ class MonitorSimpleWaveform:
         for the entire waveform.'''
         self.waveform.set(+self.value)
         if self.on_update:
-            self.on_update()
+            self.on_update(True)
+
+    @property
+    def masked_value(self):
+        return self.waveform.get()
+    active_value = masked_value
+
+    def UpdateDefault(self, value):
+        pass
 
 
 class MonitorWaveform:
@@ -112,6 +123,7 @@ class MonitorWaveform:
         self.default_value = default_value
         self.on_update = on_update
         self.offset = offset
+        self.length = BPM_count
 
         # We maintain two copies of the reported values: the values actually
         # received from the BPM, and the value reported to the IOC server.

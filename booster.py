@@ -1,6 +1,14 @@
 # Concentrator waveforms for the booster and injection paths.
 
 
+import numpy
+from cothread import catools
+from softioc import builder
+
+import monitor
+import updater
+
+
 def BRpvs(name):
     return ['BR%02dC-DI-EBPM-%02d:%s' %
         (((2*n + 6) // 11) % 4 + 1, n + 1, name)
@@ -13,10 +21,33 @@ def BSpvs(name):
     return ['BS-DI-EBPM-%02d:%s' % (n + 1, name) for n in range(7)]
 
 
-# List of Booster PVs to concentrate
+class BoosterWaveform(monitor.MonitorSimpleWaveform):
+    def MonitorArray(self, name, callback, datatype=None, timestamps = False):
+        if timestamps:
+            format = catools.FORMAT_TIME
+        else:
+            format = catools.FORMAT_RAW
+        return catools.camonitor(
+            BRpvs(name), callback, datatype = datatype, format = format)
 
-BOOSTER_CONTROL = [
-    'CF:BBA_X_S', 'CF:BBA_Y_S',
-    'FT:ENABLE_S', 'FR:ENABLE_S', 'BN:ENABLE_S', 'MS:ENABLE_S',
-    'CF:ATTEN_S', 'CF:ATTEN:DISP_S', 'CF:ATTEN:AGC_S',
-]
+def BoosterCaPutAll(pv, value):
+    monitor.CaPutAll(pv, value, make_pvs = BRpvs)
+
+def BoosterUpdater(name, **kargs):
+    return updater.Updater(name,
+        monitor = BoosterWaveform, caputall = BoosterCaPutAll, **kargs)
+
+
+
+builder.SetDeviceName('BR-DI-EBPM-01')
+
+BoosterUpdater('CF:ATTEN', min = 0, max = 63)
+BoosterUpdater('CF:ATTEN:AGC', enums = ['AGC off', 'AGC on'])
+for enable in ['FT', 'FR', 'BN', 'MS']:
+    BoosterUpdater('%s:ENABLE' % enable, enums = ['Disabled', 'Enabled'])
+
+builder.WaveformIn('BPMID', 1 + numpy.arange(23))
+BoosterWaveform('SA:X')
+BoosterWaveform('SA:Y')
+BoosterWaveform('FT:X')
+BoosterWaveform('FT:Y')
