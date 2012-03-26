@@ -3,9 +3,8 @@
 import sys, os
 from pkg_resources import require
 
-# require('cothread==2.6')
-sys.path.append('/home/mga83/epics/cothread')
-require('iocbuilder==3.20')
+require('cothread==2.6')
+require('iocbuilder==3.23')
 
 from softioc import builder, softioc
 
@@ -16,6 +15,7 @@ builder.stringIn('HOSTNAME', VAL = os.uname()[1])
 
 builder.SetDeviceName('SR-DI-EBPM-01')
 
+from softioc import pvlog
 import enabled
 import updater
 import bcd

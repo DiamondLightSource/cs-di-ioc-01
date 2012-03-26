@@ -1,12 +1,10 @@
 from pkg_resources import require
 
-# require('cothread==2.2')
+require('cothread==2.6')
 require('iocbuilder==3.23')
 
 import sys
 import os
-
-sys.path.append('/home/mga83/epics/cothread')
 
 from softioc import builder, softioc
 
