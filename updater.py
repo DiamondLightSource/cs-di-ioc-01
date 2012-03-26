@@ -162,10 +162,8 @@ class CrossUpdater:
 
 
 
-Updater('CF:GOLDEN_X',
-    waveform=True, min=-16, max=16, EGU='mm', auto_set = False)
-Updater('CF:GOLDEN_Y',
-    waveform=True, min=-16, max=16, EGU='mm', auto_set = False)
+MonitorSimpleWaveform('CF:GOLDEN_X_S')
+MonitorSimpleWaveform('CF:GOLDEN_Y_S')
 
 Updater('FT:ENABLE', enums=EnablerEnums)
 Updater('FR:ENABLE', enums=EnablerEnums)
@@ -176,8 +174,6 @@ DscUpdater    = Updater('CF:DSC',
     enums=['Fixed gains', 'Unity gains', 'Automatic'])
 AttenUpdater  = Updater('CF:ATTEN', min=0, max=62, EGU='dB')
 DetuneUpdater = Updater('CK:DETUNE', min=-1000, max=1000, EGU='ticks')
-
-
 
 CrossUpdater('MODE',
     (AutoswUpdater, DscUpdater, DetuneUpdater,),
