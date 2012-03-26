@@ -43,11 +43,11 @@ def CheckForDropouts(old_health, new_health):
     dropouts = (new_health == 2) > (old_health == 2)
     if dropouts.any():
         dropout_list = list(nonzero(dropouts)[0])
-        print 'Stopping fast feedback:', dropout_list, 'dropped out' 
+        print 'Stopping fast feedback:', dropout_list, 'dropped out'
         stop_pvs = ['SR%02dA-CS-FOFB-01:FASTART' % (c+1) for c in range(24)]
         catools.caput(stop_pvs, 0, throw = False)
-    
-    
+
+
 def TimerTick():
     # Age all the non responding entries and identify those which have passed
     # the age limit.
@@ -66,7 +66,7 @@ def TimerTick():
     NewHealth = where(Aged, 2, 1 - Enabled)
     if (NewHealth != Health.get()).any():
         CheckForDropouts(Health.get(), NewHealth)
-        
+
         Health.set(NewHealth)
         global EnabledList
         EnabledList = nonzero(NewHealth == 0)
@@ -74,7 +74,7 @@ def TimerTick():
     # Count the three possible health states
     EnabledCount    .set(size(nonzero(NewHealth == 0)))
     DisabledCount   .set(size(nonzero(NewHealth == 1)))
-    
+
     unreachable = size(nonzero(NewHealth == 2))
     if unreachable:
         unreachable_severity = alarm.MAJOR_ALARM
@@ -88,14 +88,14 @@ class PositionWaveform(MonitorWaveform):
         return builder.aIn(
             '%s:%s' % (self.name, extra), -1, 1,
             PREC = 5,   EGU  = 'mm')
-        
+
     def __MonitorWF(self, extra):
         return builder.Waveform(
             '%s:%s' % (self.name, extra), zeros(BPM_count),
             datatype = float32,
             LOPR = -1,  HOPR = 1,
             PREC = 5,   EGU  = 'mm')
-        
+
     def __init__(self, name):
         MonitorWaveform.__init__(self, name, tick=0.1)
 
@@ -142,7 +142,7 @@ class MonitorAgeReset(PositionWaveform):
         PositionWaveform.MonitorCallback(self, value, index)
         Age[index] = 0
 
-        
+
 
 # For each IOC we record its health as one of the following values:
 #

@@ -8,7 +8,7 @@ class InterlockReason: #(MonitorWaveform):
         self.reason = MonitorWaveform('IL:REASON',
             on_update = self.Update, datatype = int)
 
-        zero = numpy.zeros(BPM_count, dtype = int) 
+        zero = numpy.zeros(BPM_count, dtype = int)
         self.x   = builder.Waveform('IL:X', zero)
         self.y   = builder.Waveform('IL:Y', zero)
         self.adc = builder.Waveform('IL:ADC', zero)
@@ -24,7 +24,7 @@ class InterlockReason: #(MonitorWaveform):
 def ResetInterlock(value):
     CaPutAll('IL:REASON', 0)
 
-    
+
 InterlockReason()
 builder.Action('IL:RESET', on_update = ResetInterlock)
 

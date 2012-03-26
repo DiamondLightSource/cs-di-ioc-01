@@ -20,18 +20,18 @@ def LoadBCD(db, ma):
         os.path.join(BCD_SourceDir, BCD_FileFormat % locals()) for xy in 'XY']
     return [numpy.array(map(float, file(filename).readlines()))
         for filename in filenames]
-    
+
 
 
 class AutoBCD:
     '''This class looks after the beam current dependency waveforms.'''
-    
+
     def __init__(self):
         self.AutoBCD = builder.mbbOut('AUTOBCD',
             'Off', 'Zero', 'Auto', on_update = self.Update)
         self.status = Status('AUTOBCD')
         self.mode = 0
-        
+
         cothread.Timer(1, self.UpdateStatus, retrigger = True)
         self.zero = numpy.zeros(BPM_count)
         self.db, self.ma = (22, 10)
@@ -52,7 +52,7 @@ class AutoBCD:
 
     def AtTarget(self, value):
         return True
-        
+
 
     # Updater routines
     def Update(self, value):
@@ -67,12 +67,12 @@ class AutoBCD:
     def Update_Off(self):
         self.mode = 0
         return True
-        
+
     def Update_Zero(self):
         self.mode = 1
         self.UpdateBCD(self.zero, self.zero)
         return True
-        
+
     def Update_Auto(self):
         try:
             target_xy = LoadBCD(self.db, self.ma)
@@ -116,8 +116,8 @@ class Attenuation(CrossUpdater):
             else:
                 return False
         return on_write
-        
-    
+
+
     def __init__(self, attenuations, auto_down, auto_up):
         self.auto_up = auto_up
         self.auto_down = auto_down
@@ -128,8 +128,8 @@ class Attenuation(CrossUpdater):
         builder.aOut('ATTENUATOR:DOWN', 0, 100,
             initial_value = auto_down,
             on_update = self.write_change('auto_down'))
-            
-        
+
+
         # We directly control the ATTEN setting and BCD settings.
         updaters = (AttenUpdater, AutoBCD)
         values = [(db, (db, ma)) for db, ma in attenuations]
@@ -141,7 +141,7 @@ class Attenuation(CrossUpdater):
         CrossUpdater.__init__(self,
             'ATTENUATION', updaters, values, enums)
 
-        
+
     def UpdateSetting(self, index):
         # The special Auto mode is handle separately.
         self.auto_mode = index == self.auto_index
@@ -156,7 +156,7 @@ class Attenuation(CrossUpdater):
         if 0 <= new_index < self.auto_index and new_index != self.index:
             self.holdoff = self.HOLDOFF
             CrossUpdater.UpdateSetting(self, new_index)
-            
+
 
     def UpdateMaxAdc(self, values):
         if self.holdoff:
@@ -182,7 +182,7 @@ class Attenuation(CrossUpdater):
                 # above the low threshold, then switch the attenuation down
                 # one step.
                 self.StepAttenuation(-1)
-        
+
 
 
 AutoBCD = AutoBCD()

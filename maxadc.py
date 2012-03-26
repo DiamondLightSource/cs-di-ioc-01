@@ -20,7 +20,7 @@ class MaxADC(MonitorWaveform):
         self.maxadc_pc = builder.aIn('MAXADC_PC',
             0.0, 100, EGU = '%', PREC = 1)
         self.maxid = builder.stringIn('MAXADCID')
-        
+
         self.severity = numpy.zeros(BPM_count, dtype = int)
 
 
@@ -48,11 +48,11 @@ class CurrentWaveform:
         invalid_bpms = [BPM_name_id[bpm] for bpm in config.BPMS_no_current]
         self.valid = numpy.ones(BPM_count, dtype=bool)
         self.valid[invalid_bpms] = False
-        
+
         self.waveform = MonitorSimpleWaveform('SA:CURRENT',
             on_update = self.Update)
 
-        self.mean = builder.aIn('SA:CURRENT:MEAN', 
+        self.mean = builder.aIn('SA:CURRENT:MEAN',
             0, 500, EGU = 'mA', PREC = 3)
 
     def Update(self):

@@ -19,7 +19,7 @@ class AutoCurrent:
             initial_value = config.ISCALE_SCALING_K)
         self.threshold = builder.aOut('ISCALE_MIN', 0, 250,
             initial_value = config.ISCALE_DCCT_THRESHOLD)
-        
+
         self.timer = cothread.Timer(interval, self.Timer, retrigger=True)
         builder.aOut('ISCALE_INTERVAL', 0, 120,
             initial_value = interval, on_update = self.UpdateInterval)
@@ -29,7 +29,7 @@ class AutoCurrent:
         # and fire a new one
         self.timer.cancel()
         self.timer = cothread.Timer(interval, self.Timer, retrigger=True)
-        
+
 
     def Timer(self):
         dcct = self.dcct.value
@@ -44,7 +44,7 @@ class AutoCurrent:
             # current is within a sensible range, say +- 10%
             current_ratio = dcct / currents
             sane_currents = (0.9 < current_ratio) & (current_ratio < 1.1)
-            
+
             new_scales = scales * current_ratio
             iir_scales = iir_k * new_scales + (1 - iir_k) * scales
             pvs = [pv

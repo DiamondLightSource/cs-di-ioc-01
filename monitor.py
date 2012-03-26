@@ -44,7 +44,7 @@ def MonitorArray(name, callback, datatype=None, timestamps = False):
         events = catools.DBE_VALUE | catools.DBE_ALARM,
         datatype = datatype, format = format)
 
-    
+
 class MonitorValue:
     def __init__(self, names, datatype=None, **kargs):
         if isinstance(names, str):
@@ -60,7 +60,7 @@ class MonitorValue:
 
     def update_vector(self, value, index):
         self.value[index] = value
-        
+
 
 
 class MonitorSimpleWaveform:
@@ -76,7 +76,7 @@ class MonitorSimpleWaveform:
         self.value = numpy.zeros(BPM_count, dtype = datatype)
         self.waveform = builder.Waveform(
             server_name, +self.value, datatype = datatype)
-        
+
         MonitorArray(name, self.MonitorCallback,
             datatype = datatype, timestamps = timestamps)
         cothread.Timer(tick, self.Update, retrigger=True)
@@ -93,13 +93,13 @@ class MonitorSimpleWaveform:
         if self.on_update:
             self.on_update()
 
-            
+
 class MonitorWaveform:
     '''The MonitorWaveform class is the basic building block for monitoring an
     array of PVs, one per BPM.  The PV value read from each BPM is written into
     self.array.
     '''
-    
+
     def __init__(self,
             name, server_name=None, tick=0.2, datatype=None,
             default_value=None,
@@ -122,7 +122,7 @@ class MonitorWaveform:
         self.raw_value = numpy.zeros(BPM_count, dtype = datatype)
         self.waveform = builder.Waveform(
             server_name, +self.raw_value, datatype = datatype)
-        
+
         self.changed = False
         MonitorArray(name, self.MonitorCallback,
             datatype = datatype, timestamps = timestamps)
@@ -148,7 +148,7 @@ class MonitorWaveform:
             self.raw_value, self.default_value)
         if self.offset:
             new_value -= self.offset
-        
+
         changed = (new_value != self.masked_value).any()
         if changed:
             self.waveform.set(+new_value)
@@ -165,7 +165,7 @@ class MonitorWaveform:
     def active_value(self):
         '''Returns the subset of "active" values: rather than defaulting
         disabled values, in this version they are removed from the array.
-        This means that the active_value array may be any length <= 
+        This means that the active_value array may be any length <=
         BPM_count.'''
         import enabled
         return enabled.ActiveArray(self.raw_value)

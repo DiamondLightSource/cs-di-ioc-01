@@ -23,19 +23,19 @@ class Status:
             self.status.set(0, severity=0)
         else:
             self.status.set(1, severity=2)
-            
+
 
 class Updater:
     '''An Updater(name, ...) instance manages a group of BPM PVs and
     provides the following published PVs:
-    
+
         <name>_S        Writing to this PV writes to all BPMS
         <name>          A waveform monitoring the named value on all BPMs
         <name>:STAT     A status report field, Ok iff <name> == <name>_S
 
     Only <name>_S can be written to.
     '''
-    
+
     def __init__(self, name, enums=(), min=0, max=1, waveform=False, **extras):
 
         assert not (enums and waveform), 'Can\'t specify waveform of enums'
@@ -98,7 +98,7 @@ class Updater:
     def AtTarget(self, value):
         return self.at_target and self.writer.get() == value
 
-        
+
 
 class CrossUpdater:
     '''A CrossUpdater(name, ...) instance manages a group of Updater instances.
@@ -114,9 +114,9 @@ class CrossUpdater:
     The list of enums determines the enumerations in <name>_S, and values
     determines the values to be written each updater: value_list[i][j] is
     written to updaters[j] on setting enums[i].'''
-    
+
     def __init__(self, name, pvlist, lookup, enums):
-        builder.mbbOut(name + '_S', 
+        builder.mbbOut(name + '_S',
             initial_value = 0, on_update = self.UpdateSetting, *enums)
         self.status = Status(name)
         cothread.Timer(1, self.UpdateStatus, retrigger = True)
