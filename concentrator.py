@@ -22,6 +22,7 @@ import bcd
 import maxadc
 import interlock
 import autocurrent
+import injection
 
 builder.LoadDatabase()
 softioc.iocInit()

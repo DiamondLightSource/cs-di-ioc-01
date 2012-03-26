@@ -199,8 +199,6 @@ class Transfer:
 
 
     def on_update(self, *args):
-        self.extra.on_update(*args)
-
         # For each PV in the interval we are given the following data:
         #   values[i]   Value received during this interval for PV[i]
         #   valid[i]    Whether data was actually received

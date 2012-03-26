@@ -26,6 +26,9 @@ from softioc import builder
 from autosuper import autosuper
 
 
+VERBOSE = False
+
+
 INVALID_severity = 3
 
 
@@ -39,7 +42,9 @@ class ControllerBase(autosuper):
         self.length = len(values)
         self.values, shifts = zip(*values)
         self.shifts = 1e-3 * numpy.array(shifts)
-        self.on_update = on_update
+        self.on_update = []
+        if on_update is not None:
+            self.hook_onupdate(on_update)
         self.finish_early = finish_early
 
         for index, value in enumerate(self.values):
@@ -49,11 +54,14 @@ class ControllerBase(autosuper):
         self.timer = cothread.Timer(
             initial_delay, self.__complete, reuse = True)
 
+    def hook_onupdate(self, on_update):
+        self.on_update.append(on_update)
+
     # Called by each value when it is complete
     def _ready(self, index):
         if not self.value_ready[index]:
             self.value_ready[index] = True
-            if self.value_ready.all() and self.finish_early:
+            if self.finish_early and self.value_ready.all():
                 # Might as well process the data now
                 self.timer.reset(0)
 
@@ -74,8 +82,8 @@ class ControllerBase(autosuper):
         # for the next interval.
         origin = self._compute_origin(timestamps, valid)
 
-        if self.on_update:
-            self.on_update(values, valid, origin, timestamps, arrivals)
+        for update in self.on_update:
+            update(values, valid, origin, timestamps, arrivals)
 
         self.value_ready[:] = False
         for value in self.values:
@@ -135,7 +143,8 @@ class IntervalController(ControllerBase):
         origin = self.origin
         self.origin_offsets = timestamps - self.shifts - self.origin
         if valid.any():
-            self.origin += self.adjust_iir * self.origin_offsets[valid].mean()
+            offset = self.adjust_iir * self.origin_offsets[valid].mean()
+            self.origin += offset
         self.origin += self.interval
         self.timer.reset(
             cothread.Deadline(self.origin + self.interval + self.delay))
@@ -147,6 +156,17 @@ class TriggeredController(ControllerBase):
     repetition interval.'''
 
     def __init__(self, delay, values, on_update = None, finish_early = True):
+        '''
+        delay
+            Milliseconds after first trigger when aggregate update will be
+            generated.
+        values
+            List of values managed by this controller.
+        on_update
+            Called when update is complete.
+        finish_early
+            If set will complete as soon as all values are ready.
+        '''
         self.__super.__init__(delay, None, values, on_update, 1, finish_early)
         self.active = False
 
@@ -212,6 +232,7 @@ class Controller_extra:
 
     def __init__(self, name, controller):
         self.controller = controller
+        controller.hook_onupdate(self.on_update)
         self.valid_pv = builder.Waveform(
             '%s:VALID' % name, length = controller.length, datatype = bool,
             TSE = -2)
@@ -258,7 +279,8 @@ class ValueBase(autosuper):
             value.finalise()
             self.on_update(value)
         else:
-            print 'not valid', self.name
+            if VERBOSE:
+                print 'not valid', self.name
         return value
 
     # Called by the controller to start a new interval.
@@ -279,14 +301,16 @@ class ValueBase(autosuper):
             try:
                 value_base = self.values[interval]
             except IndexError:
-                print 'Discarding early value', self.name, interval
+                if VERBOSE:
+                    print 'Discarding early value', self.name, interval
             else:
                 value_base.update(timestamp, value, *extra)
                 if interval == 0 and value_base.valid:
                     self.controller._ready(self.index)
         else:
             # Value is too old, all we can do is discard it.
-            print 'Discarding late value', self.name, interval
+            if VERBOSE:
+                print 'Discarding late value', self.name, interval
 
     def on_update(self, value):
         '''This method is called on completion of updates.'''
@@ -401,57 +425,64 @@ class Waveform_PV(Waveform):
         self.update(value.timestamp, value, index)
 
 
+class Waveform_TS:
+    '''Helper class for published waveforms with timestamps.'''
+
+    def __init__(self, length, raw_name, ts_name = None, age_name = None):
+        if ts_name is None:
+            ts_name = '%s:TS' % raw_name
+        if age_name is None:
+            age_name = '%s:AGE' % raw_name
+        self.wf_raw = builder.Waveform(raw_name, length = length, TSE = -2)
+        self.wf_age = builder.Waveform(age_name, length = length, TSE = -2)
+        self.wf_ts  = builder.Waveform(ts_name,  length = length, TSE = -2)
+
+    def on_update(self, value):
+        ts = value.timestamp
+        self.wf_raw.set(value.value, timestamp = ts)
+        self.wf_age.set(1e3 * (value.arrival_wf - ts), timestamp = ts)
+        self.wf_ts.set(1e3 * (value.timestamp_wf - ts), timestamp = ts)
+
+
 class Waveform_Out(Waveform_PV):
     '''Simple waveform with associated timestamps.'''
 
-    def __init__(self, name, pvs, datatype = None, **kargs):
+    def __init__(self, name, pvs, **kargs):
         self.__super.__init__(name, pvs, **kargs)
-
-        length = len(pvs)
-        self.pv = builder.Waveform(
-            name, length = length, datatype = datatype, TSE = -2)
-        self.ts_pv  = builder.Waveform(
-            '%s:TS' % name,  length = length, EGU = 'ms', TSE = -2)
-        self.age_pv = builder.Waveform(
-            '%s:AGE' % name, length = length, EGU = 'ms', TSE = -2)
+        self.wf = Waveform_TS(len(pvs), name)
 
     def on_update(self, value):
         self.__super.on_update(value)
-
-        ts = value.timestamp
-        self.pv.set(value.value, timestamp = ts)
-        self.ts_pv .set(1e3 * (value.timestamp_wf - ts), timestamp = ts)
-        self.age_pv.set(1e3 * (value.arrival_wf - ts),   timestamp = ts)
+        self.wf.on_update(value)
 
 
 class MaskedWaveform(Waveform_PV):
-    def __init__(self, name, mask, default = 0, shift = 0):
-        # The mask is a mutable value which is managed externally
-        self.mask = mask
-        self.default = default
+    def __init__(self, name, pvs, mask = None, offset = 0, **kargs):
+        self.__super.__init__(name, pvs, **kargs)
 
-        pvs = ['%s:%s' % (bpm, name) for bpm in bpm_list.BPMS]
-        self.__super.__init__(name, pvs, shift = shift)
+        # The mask is a mutable pair consisting of a boolean mask of values (in
+        # the first element) to be replaced with the default (in the second
+        # element).
+        self.mask = mask
+        self.offset = offset
 
         length = len(pvs)
-        self.wf_raw = builder.Waveform(
-            '%s:RAW' % name, length = length, TSE = -2)
         self.wf_out = builder.Waveform(name, length = length, TSE = -2)
-        self.wf_ts = intervals.Waveform_TS(
-            '%s:TS' % name, '%s:AGE' % name, length)
-
-    def set_default(self, default):
-        self.default = default
+        self.wf_ts = Waveform_TS(
+            length, '%s:RAW' % name, '%s:TS' % name, '%s:AGE' % name)
 
     def on_update(self, value):
-        ts = value.timestamp
-        wf = value.value
-        self.masked_value = numpy.where(self.mask, wf, self.default)
-        self.wf_raw.set(wf, timestamp = ts)
-        self.wf_out.set(self.masked_value, timestamp = ts)
-
-        self.wf_ts.on_update(value)
         self.__super.on_update(value)
+        self.wf_ts.on_update(value)
+
+        if self.mask:
+            mask, default = self.mask
+            self.masked_value = numpy.where(mask, value.value, default)
+        else:
+            self.masked_value = +value.value
+        if self.offset:
+            self.masked_value -= self.offset
+        self.wf_out.set(self.masked_value, timestamp = value.timestamp)
 
 
 class Waveform_Mean:
