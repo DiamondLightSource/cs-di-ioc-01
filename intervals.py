@@ -23,12 +23,23 @@ import numpy
 import cothread
 from cothread import catools
 from softioc import builder
+from autosuper import autosuper
 
 
-class Controller(object):
+__all__ = [
+    'Controller', 'Controller_extra',
+    'Value', 'Value_PV',
+    'Waveform', 'Waveform_PV',
+    'Waveform_Out', 'Waveform_Masked',
+    'Waveform_TS', 'Waveform_Mean',
+]
+
+
+class Controller(autosuper):
     '''Specifies a controller of synchronously updating values.'''
 
     def __init__(self, interval, values,
+            history_length = 2,
             delay = 0, adjust_iir = 0.5, acceptance = 0.5,
             finish_early = False, on_update = None):
         '''Controller(interval, values, ...)
@@ -36,8 +47,12 @@ class Controller(object):
         interval
             Specifies the expects interval in milliseconds between updates for
             this controller.  Needs to be reasonably accurate.
+
         values
             List of ValueBase instances to generate updates to be gathered.
+
+        history_length
+            Number of historical samples required to gather a single interval.
 
         delay = 0
             Delay in milliseconds for accepting updates into the current
@@ -71,14 +86,22 @@ class Controller(object):
         self.origin = time.time()
 
         # Collection of values being managed by this controller
-        self.shifts = numpy.zeros(len(self.values))
-        for index, value in enumerate(self.values):
-            self.shifts[index] = value._register(self, index)
+        self.length = len(values)
+        self.shifts = numpy.zeros(self.length)
+        for index, value in enumerate(values):
+            self.shifts[index] = value._register(self, index, history_length)
         self.value_ready = numpy.zeros(len(self.values), dtype = bool)
 
-        # Start by expiring as soon as possible.  Until we've done our first
-        # completion none of the updaters have an interval to work with.
-        self.timer = cothread.Timer(0, self.__complete, reuse = True)
+        # Start the timer.
+        self.timer = cothread.Timer(self.delay, self.__complete, reuse = True)
+
+
+    def _get_interval(self, timestamp):
+        '''Returns interval number and margin associated with timestamp.  The
+        caller should have already applied any needed shift to the timestamp.'''
+        divided = (timestamp - self.origin) / self.interval
+        interval = round(divided)
+        return int(interval), abs(divided - interval)
 
 
     # Called by each value when it is complete
@@ -101,35 +124,34 @@ class Controller(object):
         # timestamps.  At this point all individual update notifications will
         # occur.
         n = len(self.values)
-        valid = numpy.empty(n, dtype = bool)
         values = []
+        valid = numpy.empty(n, dtype = bool)
         timestamps = numpy.empty(n)
         arrivals = numpy.empty(n)
         for i, value in enumerate(self.values):
             this = value._finalise()    # Generates individual update notify
+            values.append(this)
             valid[i] = this.valid
-            values.append(this.value)
             timestamps[i] = this.timestamp
             arrivals[i] = this.arrival
 
-        # Now do the aggregate update notification.
-        self.on_update(self.origin, valid, values, timestamps, arrivals)
-
         # Compute the next interval
+        old_origin = self.origin
+        self.origin_offsets = timestamps - self.shifts - self.origin
         if valid.any():
-            self.origin += self.adjust_iir * \
-                (timestamps[valid] - self.shifts[valid] - self.origin).mean()
+            self.origin += self.adjust_iir * self.origin_offsets[valid].mean()
         self.origin += self.interval
-        self.timer.reset(cothread.Deadline(
-            self.origin + self.interval + self.delay))
+        self.timer.reset(
+            cothread.Deadline(self.origin + self.interval + self.delay))
+
+        # Now do the aggregate update notification.
+        self.on_update(values, valid, old_origin, timestamps, arrivals)
 
         # All done, prepare for next round of updates and give each value its
         # new acceptance interval.
         self.value_ready[:] = False
-        interval = (
-            self.origin - self.acceptance, self.origin + self.acceptance)
         for value in self.values:
-            value._advance(interval)
+            value._advance()
 
 
     def on_update(self, *args):
@@ -139,15 +161,16 @@ class Controller(object):
             self.__on_update(*args)
 
 
-class ValueBase(object):
-    def __init__(self, name, shift = 0, on_update = None):
+class ValueBase(autosuper):
+    def __init__(self, name, factory, shift = 0, on_update = None):
         self.name = name
+        self.factory = factory
         self.shift = 1e-3 * shift
-        self.interval = (0, 0)
         self.__on_update = on_update
 
     # Called by the controller to complete initialisation of this value
-    def _register(self, controller, index):
+    def _register(self, controller, index, history_length):
+        self.values = [self.factory() for n in range(history_length)]
         self.controller = controller
         self.index = index
         return self.shift
@@ -155,41 +178,39 @@ class ValueBase(object):
     # Called by the controller to finish up the value.  Returns the current
     # value.
     def _finalise(self):
-        if self.validate(self.this):
-            self.this.finalise()
-            self.on_update(self.this)
+        value = self.values[0]
+        if self.validate(value):
+            value.finalise()
+            self.on_update(value)
         else:
             print 'not valid', self.name
-        return self.this
+        return value
 
     # Called by the controller to start a new interval.
-    def _advance(self, interval):
-        self.this.advance(self.next)
-        if self.this.valid:
+    def _advance(self):
+        value = self.values[0]
+        value.advance(self.values[1])
+        self.values = [value] + self.values[2:] + [self.factory()]
+        if value.valid:
             self.controller._ready(self)
-        self.interval = interval
-
 
     def update(self, timestamp, value, *extra):
         '''To be called each time the underlying value has an update.  Arguments
         are the timestamp of the value, the value itself and any value dependent
         extra argument, such as the index for waveform element updates.'''
-        start, end = self.interval
-        ts = timestamp - self.shift
-
-        if ts < start:
+        interval, margin = self.controller._get_interval(timestamp - self.shift)
+        if interval < 0:
             # Value is too old, all we can do is discard it.
-            print 'Discarding', self.name, \
-                '%.2f ms late' % (1e3 * (start - ts))
-        elif ts < end:
-            # Current value, process as current and notify completion if
-            # appropriate.
-            self.this.update(timestamp, value, *extra)
-            if self.this.valid:
-                self.controller._ready(self)
+            print 'Discarding late', self.name, interval, margin
         else:
-            # Early value, remember this in preparation for next interval.
-            self.next.update(timestamp, value, *extra)
+            try:
+                value_base = self.values[interval]
+            except IndexError:
+                print 'Dicarding early value', self.name, interval, margin
+            else:
+                value_base.update(timestamp, value, *extra)
+                if interval == 0 and value_base.valid:
+                    self.controller._ready(self)
 
     def on_update(self, value):
         '''This method is called on completion of updates.'''
@@ -224,7 +245,6 @@ class UpdateValue:
             self.timestamp = next.timestamp
             self.arrival = next.arrival
         self.valid = next.valid
-        next.valid = False
 
     def finalise(self):
         pass
@@ -234,16 +254,14 @@ class Value(ValueBase):
     '''Specifies a single updating value.'''
 
     def __init__(self, name, **kargs):
-        super(Value, self).__init__(name, **kargs)
-        self.this = UpdateValue()
-        self.next = UpdateValue()
+        self.__super.__init__(name, UpdateValue, **kargs)
 
 
 class Value_PV(Value):
     '''The usual case for a single data source: a single PV.'''
 
     def __init__(self, pv, **kargs):
-        super(Value_PV, self).__init__(pv, **kargs)
+        self.__super.__init__(pv, **kargs)
         catools.camonitor(pv, self.__pv_update, format = catools.FORMAT_TIME)
 
     def __pv_update(self, value):
@@ -278,9 +296,7 @@ class UpdateWaveform:
         self.timestamp_wf[valid_wf] = next.timestamp_wf[valid_wf]
         self.arrival_wf[valid_wf] = next.arrival_wf[valid_wf]
         self.valid_wf[:] = valid_wf
-        next.valid_wf[:] = False
         self.valid = next.valid
-        next.valid = False
 
     # Should only be called if this has been marked as a valid update
     def finalise(self):
@@ -293,9 +309,8 @@ class Waveform(ValueBase):
     '''Specifies a waveform of updating values.'''
 
     def __init__(self, name, length, validate = None, **kargs):
-        super(Waveform, self).__init__(name, **kargs)
-        self.this = UpdateWaveform(length)
-        self.next = UpdateWaveform(length)
+        self.__super.__init__(name, lambda: UpdateWaveform(length), **kargs)
+
         if validate is not None:
             self.validate = validate
 
@@ -312,65 +327,83 @@ class Waveform_PV(Waveform):
     the contributing PVs.'''
 
     def __init__(self, name, pvs, **kargs):
-        super(Waveform_PV, self).__init__(name, len(pvs), **kargs)
+        self.__super.__init__(name, len(pvs), **kargs)
         catools.camonitor(pvs, self.__pv_update, format = catools.FORMAT_TIME)
 
     def __pv_update(self, value, index):
         self.update(value.timestamp, value, index)
 
 
-class Waveform_PV_Out(Waveform_PV):
-    def __init__(self, name, pvs, datatype = None, **kargs):
-        super(Waveform_PV_Out, self).__init__(name, pvs, **kargs)
+# ------------------------------------------------------------------------------
+# Waveform publishing helper classes
+
+class Waveform_Out:
+    '''Simple waveform.'''
+
+    def __init__(self, name, length, datatype = None):
         self.pv = builder.Waveform(
-            name, numpy.zeros(len(pvs)), datatype = datatype, TSE = -2)
+            name, numpy.zeros(length), datatype = datatype, TSE = -2)
 
     def on_update(self, value):
-        if not value.valid_wf.all():
-            print 'bad update', value.valid_wf
         self.pv.set(value.value, timestamp = value.timestamp)
-        if self.mean_pv is not None:
-            self.mean_pv.set(
-                numpy.mean(value.value[value.valid_wf]),
-                timestamp = value.timestamp)
 
 
-# Adds MEAN, AGE and TS PVs.
-class Waveform_PV_extra(Waveform_PV_Out):
-    def __init__(self, name, pvs, datatype = float, **kargs):
-        super(Waveform_PV_extra, self).__init__(name, pvs, **kargs)
-
-        z = numpy.zeros(len(pvs))
-        self.mean_pv = builder.aIn('%s:MEAN' % name, TSE = -2)
-        self.ts_pv = builder.Waveform(
-            '%s:TS' % name, +z, EGU = 'ms', TSE = -2)
-        self.age_pv = builder.Waveform(
-            '%s:AGE' % name, +z, EGU = 'ms', TSE = -2)
+class Waveform_Masked(Waveform):
+    def __init__(self, name, length, datatype = None):
+        z = numpy.zeros(self.length)
+        self.masked_pv = builder.Waveform(
+            name, numpy.zeros(length), datatype = datatype, TSE = -2)
 
     def on_update(self, value):
-        super(Waveform_PV_extra, self).on_update(value)
+        self.masked_pv.set(value.value, timestamp = value.timestamp)
+
+
+class Waveform_TS:
+    '''Relative timestamp and age waveforms.'''
+
+    def __init__(self, ts_name, age_name, length):
+        z = numpy.zeros(length)
+        self.ts_pv  = builder.Waveform(ts_name,  +z, EGU = 'ms', TSE = -2)
+        self.age_pv = builder.Waveform(age_name, +z, EGU = 'ms', TSE = -2)
+
+    def on_update(self, value):
         ts = value.timestamp
-        self.mean_pv.set(
-            numpy.mean(value.value[value.valid_wf]), timestamp = ts)
-        self.ts_pv.set(1e3 * (value.timestamp_wf - ts), timestamp = ts)
-        self.age_pv.set(1e3 * (value.arrival_wf - ts), timestamp = ts)
+        self.ts_pv .set(1e3 * (value.timestamp_wf - ts), timestamp = ts)
+        self.age_pv.set(1e3 * (value.arrival_wf - ts),   timestamp = ts)
 
 
-class Controller_extra(Controller):
+class Waveform_Mean:
+    '''Average value waveform.'''
+
+    def __init__(self, name, **kargs):
+        self.mean_pv = builder.aIn(name, TSE = -2, **kargs)
+
+    def on_update(self, value):
+        value.mean = numpy.mean(value.value[value.valid_wf])
+        self.mean_pv.set(value.mean, timestamp = value.timestamp)
+
+
+
+class Controller_extra:
     '''An implementation of Controller which also publishes a number of interval
     diagnostic PVs.'''
 
-    def __init__(self, name, interval, values, **kargs):
-        super(Controller_extra, self).__init__(interval, values, **kargs)
-
-        z = numpy.zeros(len(values))
+    def __init__(self, name, controller):
+        self.controller = controller
+        z = numpy.zeros(controller.length)
         self.valid_pv = builder.Waveform(
             '%s:VALID' % name, +z, datatype = bool, TSE = -2)
         self.ts_pv = builder.Waveform('%s:TS' % name, +z, TSE = -2)
         self.age_pv = builder.Waveform('%s:AGE' % name, +z, TSE = -2)
+        self.offsets_pv = builder.Waveform('%s:OFFSETS' % name, +z, TSE = -2)
+        self.delay_pv = builder.aIn('%s:DELAY' % name, TSE = -2)
 
-    def on_update(self, origin, valid, values, timestamps, arrivals):
-        super(Controller_extra, self).on_update(origin, values)
+    def on_update(self, *args):
+        now = time.time()
+        values, valid, origin, timestamps, arrivals = args
         self.valid_pv.set(valid, timestamp = origin)
         self.ts_pv.set(1e3 * (timestamps - origin), timestamp = origin)
         self.age_pv.set(1e3 * (arrivals - origin), timestamp = origin)
+        self.offsets_pv.set(
+            1e3 * self.controller.origin_offsets, timestamp = origin)
+        self.delay_pv.set(1e3 * (now - origin), timestamp = origin)

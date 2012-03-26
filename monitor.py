@@ -29,7 +29,7 @@ def CaPutAll(pv, value):
             print 'caput failed:'
             for result in ok:
                 if not result:
-                    print '   ', result.name, '-', str(result)
+                    print '   ', str(result)
                     break       # for the moment...
     cothread.Spawn(put_task)
 
