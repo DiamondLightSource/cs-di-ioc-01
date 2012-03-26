@@ -1,20 +1,10 @@
 '''Diagnostics Storage Ring EBPM Concentrator.'''
 
 import sys, os
-DEBUG = 'D' in sys.argv[1:]
-if DEBUG:
-    print 'Running in debug mode'
-    sys.path.append('/scratch/local/python-debug')
-    sys.path.append('/home/mga83/epics/iocbuilder')
-    sys.path.append('/home/mga83/epics/cothread')
+from pkg_resources import require
 
-    import cothread
-    def Log(): print 'refs: %8d' % sys.gettotalrefcount()
-    cothread.Timer(1, Log, retrigger = True)
-else:
-    from pkg_resources import require
-    require('cothread==2.0')
-    require('iocbuilder==3.18')
+require('cothread==2.1')
+require('iocbuilder==3.20')
 
 from softioc import builder, softioc
 
