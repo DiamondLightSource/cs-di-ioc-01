@@ -16,8 +16,8 @@ SR_MA_TO_NC = 1e6 * SR_BUNCHES / F_RF       # 1.87 us (534 kHz)
 class MS_Waveform(intervals.Waveform_PV):
     ms_pvs = ['%s:MS:DELTAI' % bpm for bpm in bpm_list.BPMS]
 
-    def __init__(self, shift):
-        self.__super.__init__('MS:DELTAI', self.ms_pvs, shift = shift)
+    def __init__(self):
+        self.__super.__init__('MS:DELTAI', self.ms_pvs)
 
         length = len(self.ms_pvs)
         self.wf_out = intervals.Waveform_Out('MS:DELTAI', length)
@@ -40,8 +40,7 @@ class TransferRatio:
         self.name = name
         self.input = input
         self.output = output
-        self.pv = builder.aIn(
-            name, 0, 100, PREC = 2, EGU = '%', MDEL = -1, TSE = -2)
+        self.pv = builder.aIn(name, 0, 100, PREC = 2, EGU = '%', TSE = -2)
 
     def on_update(self, timestamp, values, valid):
         if valid[self.input] and valid[self.output]:
@@ -94,7 +93,7 @@ class Transfer:
     def __init__(self):
         # The MS waveform is an EBPM derived waveform
         builder.SetDeviceName('SR-DI-EBPM-01')
-        ms_wf = MS_Waveform(303.8)
+        ms_wf = (MS_Waveform(), 303.8)
 
         # Transfer efficiency PVs.  These are all CS-DI-XFER-01 PVs
         builder.SetDeviceName('CS-DI-XFER-01')
@@ -105,12 +104,10 @@ class Transfer:
         # and taking differences, and the MS values need to be scaled to compute
         # MS:DELTAQ
         pvs = [
-            intervals.Value_PV(pv, shift = shift)
-                for pv, shift in self.xfr_pvs] + [ms_wf]
-        self.controller = intervals.Controller(
-            200, pvs,
-            history_length = 3, delay = 350, finish_early = True,
-            acceptance = 0.5, on_update = self.on_update)
+            (intervals.Value_PV(pv), shift)
+            for pv, shift in self.xfr_pvs] + [ms_wf]
+        self.controller = intervals.IntervalController(
+            200, 350, pvs, self.on_update, history_length = 3)
 
         # Generate visible status PVs for the controller.
         self.extra = intervals.Controller_extra('INJECT', self.controller)

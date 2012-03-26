@@ -26,89 +26,80 @@ from softioc import builder
 from autosuper import autosuper
 
 
+INVALID_severity = 3
 
-class Controller(autosuper):
+
+class IntervalController:
     '''Specifies a controller of synchronously updating values.'''
 
-    def __init__(self, interval, values,
-            history_length = 2,
-            delay = 0, adjust_iir = 0.5, acceptance = 0.5,
-            finish_early = False, on_update = None):
-        '''Controller(interval, values, ...)
+    def __init__(self, interval, delay, values, on_update,
+            history_length = 2, adjust_iir = 0.5, finish_early = True):
+        '''IntervalController(interval, values, ...)
 
         interval
             Specifies the expects interval in milliseconds between updates for
             this controller.  Needs to be reasonably accurate.
 
+        delay
+            Delay in milliseconds for accepting updates into the current
+            interval.  Tune to ensure updates are not lost.
+
         values
-            List of ValueBase instances to generate updates to be gathered.
+            List of (value, shift) pairs, each value a ValueBase instance
+            generating updates to be gathered, and shift a nominal timestamp
+            shift (in milliseconds) to be applied to each update relative to the
+            interval origin.
+
+        on_update
+            Called when an interval is complete.
 
         history_length
             Number of historical samples required to gather a single interval.
 
-        delay = 0
-            Delay in milliseconds for accepting updates into the current
-            interval.  Tune to ensure updates are not lost.
-
         adjust_iir = 0.5
             Controls how rapidly the interval start is tracked.
 
-        acceptance = 0.5
-            Acceptance interval for updates in fractions of an interval.
-
         finish_early = False
             Whether to generate update if all values have arrived before end of
-            acceptance interval
-
-        on_update
-            Called when an interval is complete.
+            interval
         '''
 
-        assert acceptance <= 1, 'Overlapping acceptance interval won\'t work'
-
         self.interval = 1e-3 * interval
-        self.values = values
         self.delay = 1e-3 * delay
+        self.length = len(values)
+        self.values, shifts = zip(*values)
+        self.shifts = 1e-3 * numpy.array(shifts)
+        self.on_update = on_update
         self.adjust_iir = adjust_iir
-        self.acceptance = 0.5 * self.interval
         self.finish_early = finish_early
-        self.__on_update = on_update
-
-        # Interval management settings
-        self.origin = time.time()
 
         # Collection of values being managed by this controller
-        self.length = len(values)
-        self.shifts = numpy.zeros(self.length)
-        for index, value in enumerate(values):
-            self.shifts[index] = value._register(self, index, history_length)
-        self.value_ready = numpy.zeros(len(self.values), dtype = bool)
+        for index, value in enumerate(self.values):
+            value._register(self, index, history_length)
+        self.value_ready = numpy.zeros(self.length, dtype = bool)
 
         # Start the timer.
+        self.origin = time.time()
         self.timer = cothread.Timer(self.delay, self.__complete, reuse = True)
 
-
-    def _get_interval(self, timestamp):
-        '''Returns interval number and margin associated with timestamp.  The
-        caller should have already applied any needed shift to the timestamp.'''
-        divided = (timestamp - self.origin) / self.interval
-        interval = round(divided)
-        return int(interval), abs(divided - interval)
-
+    def _get_interval(self, index, timestamp):
+        '''Returns interval number.  The caller should have already applied any
+        needed shift to the timestamp.'''
+        return int(round(
+            (timestamp - self.shifts[index] - self.origin) / self.interval))
 
     # Called by each value when it is complete
     def _ready(self, value):
         index = value.index
         if self.value_ready[index]:
             # Hmm.  We've already heard about this one.  Don't react again, and
-            # log possible loss of information
+            # log possible loss of information.
             print 'Duplicate ready notify from', value.name
         else:
             self.value_ready[index] = True
             if self.value_ready.all() and self.finish_early:
                 # Might as well process the data now
                 self.timer.reset(0)
-
 
     # Peforms completion, advances to the next interval
     def __complete(self):
@@ -139,24 +130,71 @@ class Controller(autosuper):
         # Now do the aggregate update notification.
         self.on_update(values, valid, old_origin, timestamps, arrivals)
 
-        # All done, prepare for next round of updates and give each value its
-        # new acceptance interval.
+        # All done, prepare for next round of updates.
         self.value_ready[:] = False
         for value in self.values:
             value._advance()
 
 
-    def on_update(self, *args):
-        '''Default update method does nothing.  Can be overridden in constructor
-        or by subclassing.'''
-        if self.__on_update:
-            self.__on_update(*args)
+class TriggerController:
+    '''Used to gather data from a common trigger but without any predictable
+    repetition interval.'''
 
+    def __init__(self, delay, values, on_update):
+        self.delay = 1e-3 * delay
+        self.length = len(values)
+        self.values, shifts = zip(*values)
+        self.shifts = 1e-3 * numpy.array(shifts)
+        self.on_update = on_update
+
+        for index, value in enumerate(self.values):
+            value._register(self, index, 1)
+        self.value_ready = numpy.zeros(self.length, dtype = bool)
+
+        self.timer = cothread.Timer(None, self.__complete, reuse = True)
+        self.active = False
+
+    def _get_interval(self, index, timestamp):
+        if not self.active:
+            self.active = True
+            self.timer.reset(self.delay)
+        return 0
+
+    def _ready(self, value):
+        index = value.index
+        if self.value_ready[index]:
+            print 'Duplicate ready notify from', value.name
+        else:
+            self.value_ready[index] = True
+            if self.value_ready.all():
+                self.timer.reset(0)
+
+    def __complete(self):
+        n = len(self.values)
+        values = []
+        valid = numpy.empty(n, dtype = bool)
+        timestamps = numpy.empty(n)
+        arrivals = numpy.empty(n)
+        for i, value in enumerate(self.values):
+            this = value._finalise()    # Generates individual update notify
+            values.append(this)
+            valid[i] = this.valid
+            timestamps[i] = this.timestamp
+            arrivals[i] = this.arrival
+
+        # Compute the origin from timestamps and shifts
+        origin = (timestamps - self.shifts)[valid].mean()
+
+        self.on_update(values, valid, origin, timestamps, arrivals)
+
+        self.value_ready[:] = False
+        for value in self.values:
+            value._advance()
 
 
 class Controller_extra:
-    '''An implementation of Controller which also publishes a number of interval
-    diagnostic PVs.'''
+    '''A helper class for IntervalController which also publishes a number of
+    interval diagnostic PVs.'''
 
     def __init__(self, name, controller):
         self.controller = controller
@@ -187,10 +225,9 @@ class Controller_extra:
 # ValueBase
 
 class ValueBase(autosuper):
-    def __init__(self, name, factory, shift = 0, on_update = None):
+    def __init__(self, name, factory, on_update = None):
         self.name = name
         self.factory = factory
-        self.shift = 1e-3 * shift
         self.__on_update = on_update
 
     # Called by the controller to complete initialisation of this value
@@ -198,7 +235,6 @@ class ValueBase(autosuper):
         self.values = [self.factory() for n in range(history_length)]
         self.controller = controller
         self.index = index
-        return self.shift
 
     # Called by the controller to finish up the value.  Returns the current
     # value.
@@ -223,19 +259,19 @@ class ValueBase(autosuper):
         '''To be called each time the underlying value has an update.  Arguments
         are the timestamp of the value, the value itself and any value dependent
         extra argument, such as the index for waveform element updates.'''
-        interval, margin = self.controller._get_interval(timestamp - self.shift)
-        if interval < 0:
-            # Value is too old, all we can do is discard it.
-            print 'Discarding late', self.name, interval, margin
-        else:
+        interval = self.controller._get_interval(self.index, timestamp)
+        if interval >= 0:
             try:
                 value_base = self.values[interval]
             except IndexError:
-                print 'Dicarding early value', self.name, interval, margin
+                print 'Discarding early value', self.name, interval
             else:
                 value_base.update(timestamp, value, *extra)
                 if interval == 0 and value_base.valid:
                     self.controller._ready(self)
+        else:
+            # Value is too old, all we can do is discard it.
+            print 'Discarding late value', self.name, interval
 
     def on_update(self, value):
         '''This method is called on completion of updates.'''
@@ -257,19 +293,25 @@ class UpdateValue:
         self.value = numpy.nan
         self.arrival = numpy.nan
         self.timestamp = numpy.nan
+        self.severity = INVALID_severity
 
     def update(self, timestamp, value):
         self.arrival = time.time()
         self.value = value
         self.timestamp = timestamp
         self.valid = True
+        self.severity = value.severity
 
     def advance(self, next):
         if next.valid:
             self.value = next.value
             self.timestamp = next.timestamp
             self.arrival = next.arrival
+            self.severity = next.severity
         self.valid = next.valid
+# A question about advance -- do we discard missing data (essentialy
+# reinitialise, in which case advance is actually pointless), or merge as here?
+# Missing data is actually a bad sign...
 
     def finalise(self):
         pass
@@ -304,6 +346,8 @@ class UpdateWaveform:
         self.arrival_wf   = numpy.zeros(length) + numpy.nan
         self.timestamp_wf = numpy.zeros(length) + numpy.nan
         self.valid_wf     = numpy.zeros(length, dtype = bool)
+        self.severity_wf  = \
+            numpy.zeros(length, dtype = numpy.uint8) + INVALID_severity
         self.valid = False
         self.arrival = numpy.nan
         self.timestamp = numpy.nan
@@ -313,6 +357,7 @@ class UpdateWaveform:
         self.value[index] = value
         self.timestamp_wf[index] = timestamp
         self.valid_wf[index] = True
+        self.severity_wf[index] = value.severity
         self.valid = self.valid_wf.all()
 
     def advance(self, next):
@@ -320,6 +365,7 @@ class UpdateWaveform:
         self.value[valid_wf] = next.value[valid_wf]
         self.timestamp_wf[valid_wf] = next.timestamp_wf[valid_wf]
         self.arrival_wf[valid_wf] = next.arrival_wf[valid_wf]
+        self.severity_wf[valid_wf] = next.severity_wf[valid_wf]
         self.valid_wf[:] = valid_wf
         self.valid = next.valid
 
@@ -328,6 +374,7 @@ class UpdateWaveform:
         valid_wf = self.valid_wf
         self.timestamp = numpy.mean(self.timestamp_wf[valid_wf])
         self.arrival   = numpy.mean(self.arrival_wf[valid_wf])
+        self.severity  = numpy.max(self.severity_wf[valid_wf])
 
 
 class Waveform(ValueBase):
