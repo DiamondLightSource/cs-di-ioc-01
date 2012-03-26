@@ -2,6 +2,7 @@
 
 import os.path
 import numpy
+import bisect
 
 import cothread
 from softioc import builder
@@ -13,7 +14,7 @@ from updater import *
 
 
 
-class Attenuation(CrossUpdater):
+class Attenuation:
     '''A control for managing the global attenuation setting.'''
 
     # Leave a delay between successive auto updates to give the system time
@@ -41,31 +42,51 @@ class Attenuation(CrossUpdater):
             initial_value = auto_down,
             on_update = self.write_change('auto_down'))
 
-        # We directly control the ATTEN setting
-        updaters = (AttenUpdater,)
-        values = [(db, (db, ma)) for db, ma in attenuations]
-        enums = ['%ddB/%dmA' % (db, ma) for db, ma in attenuations] + ['Auto']
+        enums = ['%ddB/%dmA' % (db, ma) for db, ma in attenuations]
+        builder.mbbOut('ATTENUATION_S',
+            initial_value = 0, on_update = self.UpdateSetting,
+            *['Other'] + enums + ['Auto'])
 
-        self.auto_index = len(enums) - 1
+        self.status = Status('ATTENUATION')
+        cothread.Timer(1, self.UpdateStatus, retrigger = True)
+
+        self.atten = AttenUpdater
+        self.atten_values = [db for db, ma in attenuations]
+        self.auto_index = len(enums) + 1
+        self.index = 0
         self.auto_mode = False
         self.holdoff = 0
-        CrossUpdater.__init__(self, 'ATTENUATION', updaters, values, enums)
+        self.target_atten = None
 
 
     def UpdateSetting(self, index):
-        # The special Auto mode is handle separately.
+        self.index = index
+        # The special Auto mode is handled separately.
         self.auto_mode = index == self.auto_index
         if self.auto_mode:
-            return True
-        else:
-            return CrossUpdater.UpdateSetting(self, index)
+            self.target_atten = self.atten.GetValue()
+        elif 0 < index < self.auto_index:
+            self.atten.WriteNewValue(self.atten_values[index - 1])
+        return True
 
 
     def StepAttenuation(self, step):
-        new_index = self.index + step
-        if 0 <= new_index < self.auto_index and new_index != self.index:
-            self.holdoff = self.HOLDOFF
-            CrossUpdater.UpdateSetting(self, new_index)
+        # Start by discovering the current attenuation.
+        atten = self.atten.GetValue()
+        index = bisect.bisect_left(self.atten_values, atten)
+        if index < len(self.atten_values) and self.atten_values[index] == atten:
+            # At the selected index
+            new_index = index + step
+        elif step > 0:
+            new_index = index + step
+        else:
+            new_index = index
+
+        if 0 <= new_index < self.auto_index:
+            self.target_atten = self.atten_values[new_index]
+            if self.target_atten != atten:
+                self.holdoff = self.HOLDOFF
+                self.atten.WriteNewValue(self.target_atten)
 
 
     def UpdateMaxAdc(self, values):
@@ -92,6 +113,21 @@ class Attenuation(CrossUpdater):
                 # above the low threshold, then switch the attenuation down
                 # one step.
                 self.StepAttenuation(-1)
+
+
+    def UpdateStatus(self):
+        '''Ensures that the current attenuation readback is consistent with what
+        we've configured.'''
+        if self.auto_mode:
+            ok = self.atten.GetValue() == self.target_atten and \
+                self.atten.at_target
+        elif self.index == 0:
+            # In this mode we simply mirror ATTEN:STAT
+            ok = self.atten.at_target
+        else:
+            # Specific attenuation selected, ensure this is where we are
+            ok = self.atten.AtTarget(self.atten_values[self.index - 1])
+        self.status.Update(ok)
 
 
 attenuation = Attenuation(ATTENUATOR_LIST, 10, 75)

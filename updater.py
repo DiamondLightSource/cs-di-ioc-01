@@ -36,7 +36,9 @@ class Updater:
     Only <name>_S can be written to.
     '''
 
-    def __init__(self, name, enums=(), min=0, max=1, waveform=False, **extras):
+    def __init__(self,
+            name, enums=(), min=0, max=1, waveform=False,
+            auto_set = True, **extras):
 
         assert not (enums and waveform), 'Can\'t specify waveform of enums'
         writer_name = name + '_S'
@@ -71,6 +73,10 @@ class Updater:
 
         self.status = Status(name)
 
+        if auto_set:
+            cothread.Timer(5, self.OnStartup)
+
+
     def Validate(self, pv, value):
         '''Called asynchronously to validate the proposed new value.'''
         if numpy.amin(value) < self.min or self.max < numpy.amax(value):
@@ -98,6 +104,14 @@ class Updater:
     def AtTarget(self, value):
         return self.at_target and self.writer.get() == value
 
+    def GetValue(self):
+        '''Returns consensus value.'''
+        return numpy.median(self.monitor.active_value)
+
+    # Called during startup after things have had a moment to settle
+    def OnStartup(self):
+        self.writer.set(self.GetValue())
+
 
 
 class CrossUpdater:
@@ -115,15 +129,16 @@ class CrossUpdater:
     determines the values to be written each updater: value_list[i][j] is
     written to updaters[j] on setting enums[i].'''
 
-    def __init__(self, name, pvlist, lookup, enums):
+    def __init__(self, name, pvlist, lookup, enums, initial_value = 0):
         builder.mbbOut(name + '_S',
-            initial_value = 0, on_update = self.UpdateSetting, *enums)
+            initial_value = initial_value,
+            on_update = self.UpdateSetting, *enums)
         self.status = Status(name)
         cothread.Timer(1, self.UpdateStatus, retrigger = True)
 
         self.lookup = lookup
         self.pvlist = pvlist
-        self.index = 0
+        self.index = initial_value
         self.setting = self.lookup[self.index]
 
     def UpdateSetting(self, index):
@@ -145,8 +160,10 @@ class CrossUpdater:
 
 
 
-Updater('CF:GOLDEN_X', waveform=True, min=-16, max=16, EGU='mm')
-Updater('CF:GOLDEN_Y', waveform=True, min=-16, max=16, EGU='mm')
+Updater('CF:GOLDEN_X',
+    waveform=True, min=-16, max=16, EGU='mm', auto_set = False)
+Updater('CF:GOLDEN_Y',
+    waveform=True, min=-16, max=16, EGU='mm', auto_set = False)
 
 Updater('FT:ENABLE', enums=EnablerEnums)
 Updater('FR:ENABLE', enums=EnablerEnums)
@@ -163,4 +180,4 @@ DetuneUpdater = Updater('CK:DETUNE', min=-1000, max=1000, EGU='ticks')
 CrossUpdater('MODE',
     (AutoswUpdater, DscUpdater, DetuneUpdater,),
     ((0, 0, 0), (1, 2, 400),),
-    ('Tune', 'Orbit',))
+    ('Tune', 'Orbit',), initial_value = 1)
