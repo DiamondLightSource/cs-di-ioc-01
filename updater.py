@@ -147,8 +147,6 @@ class CrossUpdater:
 
 Updater('CF:GOLDEN_X', waveform=True, min=-16, max=16, EGU='mm')
 Updater('CF:GOLDEN_Y', waveform=True, min=-16, max=16, EGU='mm')
-BcdXUpdater = Updater('CF:BCD_X', waveform=True, min=-16, max=16, EGU='mm')
-BcdYUpdater = Updater('CF:BCD_Y', waveform=True, min=-16, max=16, EGU='mm')
 
 Updater('FT:ENABLE', enums=EnablerEnums)
 Updater('FR:ENABLE', enums=EnablerEnums)
