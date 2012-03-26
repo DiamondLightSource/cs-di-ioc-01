@@ -29,7 +29,59 @@ from autosuper import autosuper
 INVALID_severity = 3
 
 
-class IntervalController:
+class ControllerBase(autosuper):
+    '''Captures common features of all controllers.'''
+
+    def __init__(self,
+            delay, initial_delay, values, on_update, history_length,
+            finish_early):
+        self.delay = 1e-3 * delay
+        self.length = len(values)
+        self.values, shifts = zip(*values)
+        self.shifts = 1e-3 * numpy.array(shifts)
+        self.on_update = on_update
+        self.finish_early = finish_early
+
+        for index, value in enumerate(self.values):
+            value._register(self, index, history_length)
+        self.value_ready = numpy.zeros(self.length, dtype = bool)
+
+        self.timer = cothread.Timer(
+            initial_delay, self.__complete, reuse = True)
+
+    # Called by each value when it is complete
+    def _ready(self, index):
+        if not self.value_ready[index]:
+            self.value_ready[index] = True
+            if self.value_ready.all() and self.finish_early:
+                # Might as well process the data now
+                self.timer.reset(0)
+
+    def __complete(self):
+        # Gather the values and timestamps for this update.
+        values = []
+        valid = numpy.empty(self.length, dtype = bool)
+        timestamps = numpy.empty(self.length)
+        arrivals = numpy.empty(self.length)
+        for i, value in enumerate(self.values):
+            this = value._finalise()    # Generates individual update notify
+            values.append(this)
+            valid[i] = this.valid
+            timestamps[i] = this.timestamp
+            arrivals[i] = this.arrival
+
+        # Compute the origin from timestamps and shifts.  May also start timer
+        # for the next interval.
+        origin = self._compute_origin(timestamps, valid)
+
+        self.on_update(values, valid, origin, timestamps, arrivals)
+
+        self.value_ready[:] = False
+        for value in self.values:
+            value._advance()
+
+
+class IntervalController(ControllerBase):
     '''Specifies a controller of synchronously updating values.'''
 
     def __init__(self, interval, delay, values, on_update,
@@ -64,23 +116,13 @@ class IntervalController:
             interval
         '''
 
+        self.__super.__init__(
+            delay, 1e-3 * delay, values, on_update, history_length,
+            finish_early)
+
         self.interval = 1e-3 * interval
-        self.delay = 1e-3 * delay
-        self.length = len(values)
-        self.values, shifts = zip(*values)
-        self.shifts = 1e-3 * numpy.array(shifts)
-        self.on_update = on_update
         self.adjust_iir = adjust_iir
-        self.finish_early = finish_early
-
-        # Collection of values being managed by this controller
-        for index, value in enumerate(self.values):
-            value._register(self, index, history_length)
-        self.value_ready = numpy.zeros(self.length, dtype = bool)
-
-        # Start the timer.
         self.origin = time.time()
-        self.timer = cothread.Timer(self.delay, self.__complete, reuse = True)
 
     def _get_interval(self, index, timestamp):
         '''Returns interval number.  The caller should have already applied any
@@ -88,70 +130,23 @@ class IntervalController:
         return int(round(
             (timestamp - self.shifts[index] - self.origin) / self.interval))
 
-    # Called by each value when it is complete
-    def _ready(self, value):
-        index = value.index
-        if self.value_ready[index]:
-            # Hmm.  We've already heard about this one.  Don't react again, and
-            # log possible loss of information.
-            print 'Duplicate ready notify from', value.name
-        else:
-            self.value_ready[index] = True
-            if self.value_ready.all() and self.finish_early:
-                # Might as well process the data now
-                self.timer.reset(0)
-
-    # Peforms completion, advances to the next interval
-    def __complete(self):
-        # Gather all final values: we're interested in value, validity and
-        # timestamps.  At this point all individual update notifications will
-        # occur.
-        n = len(self.values)
-        values = []
-        valid = numpy.empty(n, dtype = bool)
-        timestamps = numpy.empty(n)
-        arrivals = numpy.empty(n)
-        for i, value in enumerate(self.values):
-            this = value._finalise()    # Generates individual update notify
-            values.append(this)
-            valid[i] = this.valid
-            timestamps[i] = this.timestamp
-            arrivals[i] = this.arrival
-
-        # Compute the next interval
-        old_origin = self.origin
+    def _compute_origin(self, timestamps, valid):
+        origin = self.origin
         self.origin_offsets = timestamps - self.shifts - self.origin
         if valid.any():
             self.origin += self.adjust_iir * self.origin_offsets[valid].mean()
         self.origin += self.interval
         self.timer.reset(
             cothread.Deadline(self.origin + self.interval + self.delay))
-
-        # Now do the aggregate update notification.
-        self.on_update(values, valid, old_origin, timestamps, arrivals)
-
-        # All done, prepare for next round of updates.
-        self.value_ready[:] = False
-        for value in self.values:
-            value._advance()
+        return origin
 
 
-class TriggerController:
+class TriggerController(ControllerBase):
     '''Used to gather data from a common trigger but without any predictable
     repetition interval.'''
 
     def __init__(self, delay, values, on_update):
-        self.delay = 1e-3 * delay
-        self.length = len(values)
-        self.values, shifts = zip(*values)
-        self.shifts = 1e-3 * numpy.array(shifts)
-        self.on_update = on_update
-
-        for index, value in enumerate(self.values):
-            value._register(self, index, 1)
-        self.value_ready = numpy.zeros(self.length, dtype = bool)
-
-        self.timer = cothread.Timer(None, self.__complete, reuse = True)
+        self.__super.__init__(delay, None, values, on_update, 1)
         self.active = False
 
     def _get_interval(self, index, timestamp):
@@ -160,36 +155,54 @@ class TriggerController:
             self.timer.reset(self.delay)
         return 0
 
-    def _ready(self, value):
-        index = value.index
-        if self.value_ready[index]:
-            print 'Duplicate ready notify from', value.name
-        else:
-            self.value_ready[index] = True
-            if self.value_ready.all():
-                self.timer.reset(0)
+    def _compute_origin(self, timestamps, valid):
+        return (timestamps - self.shifts)[valid].mean()
+
+
+class IrregularController:
+    '''Gathers irregularly updating data with minimum refractory interval and
+    minimum delay before update.'''
+
+    # The update and holdoff delays are used to prevent a cascade of updates
+    # when lots of updates are being received.  First the update_delay is used
+    # to pause after a first event is seen so that any further updates can be
+    # processed.  Secondly, the holdoff_delay is used to prevent immediate
+    # retriggering.
+
+    def __init__(self, update_delay, holdoff_delay, values):
+        self.update_delay  = 1e-3 * update_delay
+        self.holdoff_delay = 1e-3 * holdoff_delay
+        self.values = values
+
+        for index, value in enumerate(self.values):
+            value._register(self, index, 1)
+        self.waiting = False
+        self.holdoff = False
+
+    def _ready(self, index):
+        pass
+
+    def _get_interval(self, index, timestamp):
+        if not self.waiting:
+            self.waiting = True
+            if not self.holdoff:
+                cothread.Timer(self.update_delay, self.__complete)
+        return 0
 
     def __complete(self):
-        n = len(self.values)
-        values = []
-        valid = numpy.empty(n, dtype = bool)
-        timestamps = numpy.empty(n)
-        arrivals = numpy.empty(n)
-        for i, value in enumerate(self.values):
-            this = value._finalise()    # Generates individual update notify
-            values.append(this)
-            valid[i] = this.valid
-            timestamps[i] = this.timestamp
-            arrivals[i] = this.arrival
+        self.waiting = False
+        self.holdoff = True
+        cothread.Timer(self.holdoff_delay, self.__holdoff)
 
-        # Compute the origin from timestamps and shifts
-        origin = (timestamps - self.shifts)[valid].mean()
-
-        self.on_update(values, valid, origin, timestamps, arrivals)
-
-        self.value_ready[:] = False
         for value in self.values:
-            value._advance()
+            # Note that we don't advance the values.
+            value._finalise()
+
+    def __holdoff(self):
+        self.holdoff = False
+        if self.waiting:
+            self.__complete()
+
 
 
 class Controller_extra:
@@ -232,9 +245,9 @@ class ValueBase(autosuper):
 
     # Called by the controller to complete initialisation of this value
     def _register(self, controller, index, history_length):
-        self.values = [self.factory() for n in range(history_length)]
         self.controller = controller
         self.index = index
+        self.values = [self.factory() for n in range(history_length)]
 
     # Called by the controller to finish up the value.  Returns the current
     # value.
@@ -249,16 +262,17 @@ class ValueBase(autosuper):
 
     # Called by the controller to start a new interval.
     def _advance(self):
-        value = self.values[0]
-        value.advance(self.values[1])
-        self.values = [value] + self.values[2:] + [self.factory()]
-        if value.valid:
-            self.controller._ready(self)
+        self.values = self.values[1:] + [self.factory()]
+        if self.values[0].valid:
+            self.controller._ready(self.index)
 
     def update(self, timestamp, value, *extra):
         '''To be called each time the underlying value has an update.  Arguments
         are the timestamp of the value, the value itself and any value dependent
         extra argument, such as the index for waveform element updates.'''
+#         if numpy.random.randint(10) == 0: return    # Discard random data
+#         timestamp += 0.04 * numpy.random.randn()    # Fuzz the timestamp
+
         interval = self.controller._get_interval(self.index, timestamp)
         if interval >= 0:
             try:
@@ -268,7 +282,7 @@ class ValueBase(autosuper):
             else:
                 value_base.update(timestamp, value, *extra)
                 if interval == 0 and value_base.valid:
-                    self.controller._ready(self)
+                    self.controller._ready(self.index)
         else:
             # Value is too old, all we can do is discard it.
             print 'Discarding late value', self.name, interval
@@ -284,37 +298,56 @@ class ValueBase(autosuper):
 
 
 # ------------------------------------------------------------------------------
-# Single value update
+# Core Value classes.
 
 class UpdateValue:
     def __init__(self):
-        self.timestamp = numpy.nan
-        self.valid = False
         self.value = numpy.nan
         self.arrival = numpy.nan
         self.timestamp = numpy.nan
+        self.valid = False
         self.severity = INVALID_severity
 
     def update(self, timestamp, value):
-        self.arrival = time.time()
         self.value = value
+        self.arrival = time.time()
         self.timestamp = timestamp
         self.valid = True
         self.severity = value.severity
 
-    def advance(self, next):
-        if next.valid:
-            self.value = next.value
-            self.timestamp = next.timestamp
-            self.arrival = next.arrival
-            self.severity = next.severity
-        self.valid = next.valid
-# A question about advance -- do we discard missing data (essentialy
-# reinitialise, in which case advance is actually pointless), or merge as here?
-# Missing data is actually a bad sign...
-
     def finalise(self):
         pass
+
+
+class UpdateWaveform:
+    def __init__(self, length):
+        self.value        = numpy.zeros(length) + numpy.nan
+        self.arrival_wf   = numpy.zeros(length) + numpy.nan
+        self.timestamp_wf = numpy.zeros(length) + numpy.nan
+        self.valid_wf     = numpy.zeros(length, dtype = bool)
+        self.severity_wf  = \
+            numpy.zeros(length, dtype = numpy.uint8) + INVALID_severity
+
+        self.valid = False
+        self.arrival = numpy.nan
+        self.timestamp = numpy.nan
+        self.severity = INVALID_severity
+
+    def update(self, timestamp, value, index):
+        self.value[index] = value
+        self.arrival_wf[index] = time.time()
+        self.timestamp_wf[index] = timestamp
+        self.valid_wf[index] = True
+        self.severity_wf[index] = value.severity
+
+        self.valid = self.valid_wf.all()
+
+    # Should only be called if this has been marked as a valid update
+    def finalise(self):
+        valid_wf = self.valid_wf
+        self.timestamp = numpy.mean(self.timestamp_wf[valid_wf])
+        self.arrival   = numpy.mean(self.arrival_wf[valid_wf])
+        self.severity  = numpy.max(self.severity_wf[valid_wf])
 
 
 class Value(ValueBase):
@@ -337,45 +370,6 @@ class Value_PV(Value):
 
 # ------------------------------------------------------------------------------
 # Waveform value update
-
-class UpdateWaveform:
-    def __init__(self, length, validate = None):
-        if validate is not None:
-            self.validate = validate
-        self.value        = numpy.zeros(length) + numpy.nan
-        self.arrival_wf   = numpy.zeros(length) + numpy.nan
-        self.timestamp_wf = numpy.zeros(length) + numpy.nan
-        self.valid_wf     = numpy.zeros(length, dtype = bool)
-        self.severity_wf  = \
-            numpy.zeros(length, dtype = numpy.uint8) + INVALID_severity
-        self.valid = False
-        self.arrival = numpy.nan
-        self.timestamp = numpy.nan
-
-    def update(self, timestamp, value, index):
-        self.arrival_wf[index] = time.time()
-        self.value[index] = value
-        self.timestamp_wf[index] = timestamp
-        self.valid_wf[index] = True
-        self.severity_wf[index] = value.severity
-        self.valid = self.valid_wf.all()
-
-    def advance(self, next):
-        valid_wf = next.valid_wf
-        self.value[valid_wf] = next.value[valid_wf]
-        self.timestamp_wf[valid_wf] = next.timestamp_wf[valid_wf]
-        self.arrival_wf[valid_wf] = next.arrival_wf[valid_wf]
-        self.severity_wf[valid_wf] = next.severity_wf[valid_wf]
-        self.valid_wf[:] = valid_wf
-        self.valid = next.valid
-
-    # Should only be called if this has been marked as a valid update
-    def finalise(self):
-        valid_wf = self.valid_wf
-        self.timestamp = numpy.mean(self.timestamp_wf[valid_wf])
-        self.arrival   = numpy.mean(self.arrival_wf[valid_wf])
-        self.severity  = numpy.max(self.severity_wf[valid_wf])
-
 
 class Waveform(ValueBase):
     '''Specifies a waveform of updating values.'''
