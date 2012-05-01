@@ -43,7 +43,7 @@ class Attenuation:
             on_update = self.write_change('auto_down'))
 
         enums = ['%ddB/%dmA' % (db, ma) for db, ma in attenuations]
-        builder.mbbOut('ATTENUATION_S',
+        mode = builder.mbbOut('ATTENUATION_S',
             initial_value = 0, on_update = self.UpdateSetting,
             *['Other'] + enums + ['Auto'])
 
@@ -57,6 +57,9 @@ class Attenuation:
         self.auto_mode = False
         self.holdoff = 0
         self.target_atten = None
+
+        # Switch into auto mode after giving things time to settle
+        cothread.Timer(6, lambda: mode.set(len(enums) + 1))
 
 
     def UpdateSetting(self, index):
@@ -85,6 +88,7 @@ class Attenuation:
         if 0 <= new_index < self.auto_index:
             self.target_atten = self.atten_values[new_index]
             if self.target_atten != atten:
+                print 'StepAttenuation from', atten, 'to', self.target_atten
                 self.holdoff = self.HOLDOFF
                 self.atten.WriteNewValue(self.target_atten)
 
@@ -96,22 +100,24 @@ class Attenuation:
             import enabled
             # We only pay any attention in auto mode
             # Only look at values from enabled BPMs
-            mask = enabled.Health.get() == 0
+            health = enabled.Health.get()
+            mask = health == 0
             # Count the number of BPMs above the two AGC thresholds
             high_count    = \
                 numpy.sum(numpy.where(mask, values > self.auto_up, 0))
             not_low_count = \
                 numpy.sum(numpy.where(mask, values > self.auto_down, 0))
+            unreachable_count = numpy.sum(health == 2)
 
             # If enough BPMs are over the threshold we trigger a switch.
             if high_count >= 2:
                 # If at least two BPMs are reading high then switch the
                 # attenuation up one step.
                 self.StepAttenuation(+1)
-            elif not_low_count == 0:
-                # If all of the BPMs are reading low, ie none are reading
-                # above the low threshold, then switch the attenuation down
-                # one step.
+            elif not_low_count == 0 and unreachable_count <= 2:
+                # A trifle tricky here.  Only step attenuation down if no BPMs
+                # are over the threshold and no more than two BPMs are recorded
+                # as currently unreachable.
                 self.StepAttenuation(-1)
 
 
