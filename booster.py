@@ -44,6 +44,7 @@ builder.SetDeviceName('BR-DI-EBPM-01')
 BoosterUpdater('CF:ATTEN', min = 0, max = 63, EGU = 'dB')
 BoosterUpdater('CF:ATTEN:AGC', enums = ['AGC off', 'AGC on'])
 BoosterUpdater('CF:AUTOSW', enums = ['Manual', 'Automatic'])
+BoosterUpdater('CF:DSC', enums=['Fixed gains', 'Unity gains', 'Automatic'])
 BoosterUpdater('CK:DETUNE', min = -1000, max = 1000, EGU = 'ticks')
 for enable in ['FT', 'FR', 'BN', 'MS']:
     BoosterUpdater('%s:ENABLE' % enable, enums = ['Disabled', 'Enabled'])

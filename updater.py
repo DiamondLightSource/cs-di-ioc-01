@@ -113,6 +113,7 @@ class Updater:
     # Called during startup after things have had a moment to settle
     def OnStartup(self):
         self.writer.set(self.GetValue())
+        self.Update(False)
 
 
 

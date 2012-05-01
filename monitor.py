@@ -82,19 +82,23 @@ class MonitorSimpleWaveform:
         self.waveform = builder.Waveform(
             server_name, +self.value, datatype = datatype)
 
+        self.changed = False
         cothread.Timer(tick, self.Update, retrigger=True)
 
     def MonitorCallback(self, value, index):
         '''This routine is called each time any of the monitored elements
         changes.'''
         self.value[index] = value
+        self.changed = True
 
     def Update(self):
         '''This is called on a timer and is used to generate a collected update
         for the entire waveform.'''
-        self.waveform.set(+self.value)
-        if self.on_update:
-            self.on_update(True)
+        if self.changed:
+            self.waveform.set(+self.value)
+            if self.on_update:
+                self.on_update(True)
+            self.changed = False
 
     @property
     def masked_value(self):

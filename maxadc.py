@@ -86,3 +86,14 @@ MonitorWaveform('PM:ADC_OFL',    tick = 1, datatype = bool)
 MonitorWaveform('PM:X_OFFSET',   tick = 1, datatype = int, offset = 15384)
 MonitorWaveform('PM:Y_OFFSET',   tick = 1, datatype = int, offset = 15384)
 MonitorWaveform('PM:ADC_OFFSET', tick = 1, datatype = int, offset = 15384)
+
+# Interlocks
+MonitorSimpleWaveform('IL:MINX', tick = 1)
+MonitorSimpleWaveform('IL:MAXX', tick = 1)
+MonitorSimpleWaveform('IL:MINY', tick = 1)
+MonitorSimpleWaveform('IL:MAXY', tick = 1)
+
+# Communication controller statistics
+MonitorSimpleWaveform('FF:PROCESS_TIME_US', tick = 1)
+MonitorSimpleWaveform('FF:RXFIFO', tick = 1)
+MonitorSimpleWaveform('FF:TXFIFO', tick = 1)
