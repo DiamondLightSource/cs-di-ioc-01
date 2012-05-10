@@ -85,7 +85,7 @@ class Attenuation:
         else:
             new_index = index
 
-        if 0 <= new_index < self.auto_index:
+        if 0 <= new_index < len(self.atten_values):
             self.target_atten = self.atten_values[new_index]
             if self.target_atten != atten:
                 print 'StepAttenuation from', atten, 'to', self.target_atten
