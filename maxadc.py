@@ -13,13 +13,16 @@ MAX_ADC = 2**15
 
 class MaxADC(MonitorWaveform):
     def __init__(self):
-        MonitorWaveform.__init__(self, 'SA:MAXADC', 'MAXADCWF',
-            datatype = int, timestamps = True)
+        MonitorWaveform.__init__(self, 'SA:MAXADC_PC',
+            timestamps = True)
 
-        self.maxadc = builder.longIn('MAXADC', 0, MAX_ADC)
-        self.maxadc_pc = builder.aIn('MAXADC_PC',
+        self.maxadc = builder.aIn('MAXADC_PC',
             0.0, 100, EGU = '%', PREC = 1)
         self.maxid = builder.stringIn('MAXADCID')
+
+        # This PV now only exists for backwards compatibility -- the _PC PV has
+        # the true readings.
+        self.maxadc_raw = builder.longIn('MAXADC', 0, MAX_ADC)
 
         self.severity = numpy.zeros(BPM_count, dtype = int)
 
@@ -34,13 +37,16 @@ class MaxADC(MonitorWaveform):
         maxadcwf = self.masked_value
         maxsev = numpy.amax(self.severity)
         maxval = numpy.amax(maxadcwf)
-        maxval_pc = 100. * maxval / MAX_ADC
+        # Reconstruct (inferred) raw maximum ADC reading.  Only for backwards
+        # compatibility -- historically this is the PV we archive.
+        maxval_raw = int(round(MAX_ADC * maxval / 100.))
+
+        self.maxadc_raw.set(maxval_raw, severity=maxsev)
         self.maxadc.set(maxval, severity=maxsev)
-        self.maxadc_pc.set(maxval_pc, severity=maxsev)
 
         self.maxid.set(BPMS[numpy.argmax(maxadcwf)])
 
-        bcd.attenuation.UpdateMaxAdc(100. * maxadcwf / MAX_ADC)
+        bcd.attenuation.UpdateMaxAdc(maxadcwf)
 
 
 class CurrentWaveform:
