@@ -46,6 +46,9 @@ def CheckForDropouts(old_health, new_health):
         print 'Stopping fast feedback:', dropout_list, 'dropped out'
         stop_pvs = ['SR%02dA-CS-FOFB-01:FASTART' % (c+1) for c in range(24)]
         catools.caput(stop_pvs, 0, throw = False)
+        catools.caput(
+            'SR01A-CS-FOFB-01:UNREACHABLE', BPMS[dropout_list[0]],
+            throw = False)
 
 
 def TimerTick():
