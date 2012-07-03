@@ -14,5 +14,5 @@ if (($#)); then
     export EPICS_CA_REPEATER_PORT=6065
     "$@"
 else
-    runedm -p 6064 sr
+    runedm -p 6064 sr/overview.edl
 fi
