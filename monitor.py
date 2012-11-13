@@ -34,13 +34,13 @@ def CaPutAll(pv, value, make_pvs = BPMpvs):
     cothread.Spawn(put_task)
 
 
-def MonitorArray(name, callback, datatype=None, timestamps = False):
+def MonitorArray(name, callback, datatype=None, timestamps = False, pvs=BPMpvs):
     if timestamps:
         format = catools.FORMAT_TIME
     else:
         format = catools.FORMAT_RAW
     return catools.camonitor(
-        BPMpvs(name), callback,
+        pvs(name), callback,
         events = catools.DBE_VALUE | catools.DBE_ALARM,
         datatype = datatype, format = format)
 

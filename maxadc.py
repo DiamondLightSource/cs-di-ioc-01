@@ -13,11 +13,9 @@ MAX_ADC = 2**15
 
 class MaxADC(MonitorWaveform):
     def __init__(self):
-        MonitorWaveform.__init__(self, 'SA:MAXADC_PC',
-            timestamps = True)
+        MonitorWaveform.__init__(self, 'SA:MAXADC_PC', timestamps = True)
 
-        self.maxadc = builder.aIn('MAXADC_PC',
-            0.0, 100, EGU = '%', PREC = 1)
+        self.maxadc = builder.aIn('MAXADC_PC', 0.0, 100, EGU = '%', PREC = 1)
         self.maxid = builder.stringIn('MAXADCID')
 
         # This PV now only exists for backwards compatibility -- the _PC PV has
@@ -71,6 +69,13 @@ class CurrentWaveform:
             self.mean.set(0)
 
 
+class CorrectorWaveform(MonitorSimpleWaveform):
+    def corrector_pvs(self, name):
+        return ['SR%02dA-CS-FOFB-01:%s' % (c + 1, name) for c in range(24)]
+    def MonitorArray(self, *args, **kwargs):
+        return MonitorArray(*args, pvs = self.corrector_pvs, **kwargs)
+
+
 MaxADC()
 
 builder.WaveformIn('BPMID', BPM_ids)
@@ -107,3 +112,10 @@ MonitorSimpleWaveform('FF:SOFT_ERR', tick = 1)
 MonitorSimpleWaveform('FF:HARD_ERR', tick = 1)
 MonitorSimpleWaveform('FF:FRAME_ERR', tick = 1)
 MonitorSimpleWaveform('FF:BPM_COUNT', tick = 1)
+
+# Corrector waveforms
+builder.SetDeviceName('SR-CS-FOFB-01')
+builder.WaveformIn('CELLID', 1 + numpy.arange(24))
+CorrectorWaveform('TFMAX', tick = 1)
+CorrectorWaveform('TFMIN', tick = 1)
+CorrectorWaveform('NODES', tick = 1)
