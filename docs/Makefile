@@ -1,17 +1,16 @@
 # Makefile for building cothread documentation
 
-# Ensure asciidoc is on the path.
-PATH := $(PATH):/dls_sw/tools/local/bin
+RST2HTML = rst2html
 
-ASCIIDOC_FILES = $(wildcard *.txt)
+SOURCE_FILES = $(wildcard *.rst)
 
-HTML_FILES = $(patsubst %.txt, %.html, $(ASCIIDOC_FILES))
+HTML_FILES = $(patsubst %.rst, %.html, $(SOURCE_FILES))
 
-default: $(HTML_FILES) 
+default: $(HTML_FILES)
 
 clean:
-	rm -f *.html *.xml
+	rm -f *.html
 
-%.html: %.txt
-	asciidoc -o $@ $<
+%.html: %.rst
+	$(RST2HTML) $^ >$@
 

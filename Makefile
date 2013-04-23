@@ -3,7 +3,7 @@
 default: docs
 
 clean:
-	rm *.pyc
+	rm -f *.pyc
 	make -C docs clean
 
 docs:
