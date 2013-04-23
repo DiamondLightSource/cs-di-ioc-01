@@ -5,6 +5,21 @@
 import sys
 if 'C' in sys.argv[1:]:
     CONFIG_FILE = 'CS-DI-IOC-01.config'
+
+    # Also hack caput
+    class Fail:
+        ok = False
+        def __init__(self, name): self.name = name
+    def caput(pvs, *args, **kargs):
+        print 'caput', pvs, args, kargs
+        if isinstance(pvs, str):
+            return Fail(pvs)
+        else:
+            return map(Fail, pvs)
+
+    from cothread import catools
+    catools.caput = caput
+
 else:
     CONFIG_FILE = '/home/ops/diagnostics/concentrator/CS-DI-IOC-01.config'
 
