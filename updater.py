@@ -162,9 +162,16 @@ class CrossUpdater:
             for pv, value in zip(self.pvlist, self.setting)]))
 
 
+def reset_bcd(value):
+    CaPutAll('BCD_X_S', 0)
+    CaPutAll('BCD_Y_S', 0)
+builder.boolOut('RESET_BCD', on_update = reset_bcd)
+
 
 MonitorSimpleWaveform('CF:GOLDEN_X_S')
 MonitorSimpleWaveform('CF:GOLDEN_Y_S')
+MonitorSimpleWaveform('CF:BCD_X_S')
+MonitorSimpleWaveform('CF:BCD_Y_S')
 
 Updater('FT:ENABLE', enums=EnablerEnums)
 Updater('FR:ENABLE', enums=EnablerEnums)
