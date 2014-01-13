@@ -140,6 +140,7 @@ class Transfer:
             TransferRatio('BR-BS-01', 3, 4, 80),
             TransferRatio('BS-01-02', 4, 5, 80),
             TransferRatio('BS-SR',    5, 6, 60),
+            TransferRatio('BS-01-MS', 4, 7, 48),
             TransferRatio('BS-MS',    5, 7, 60),
             # Compound transfers from LB-01
             TransferRatio('LI-LB-03', 0, 2, 64),
@@ -150,7 +151,8 @@ class Transfer:
             TransferRatio('LI-MS',    0, 7, 12),
             # Transfers from BR
             TransferRatio('BR-SR',    3, 6, 38),
-            TransferRatio('BR-MS',    3, 7, 38)]
+            TransferRatio('BR-MS',    3, 7, 38),
+        ]
 
         # Historical waveforms for booster and BTS-02 for 10 seconds, calculated
         # using offsets above
