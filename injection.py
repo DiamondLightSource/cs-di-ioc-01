@@ -56,7 +56,14 @@ class TransferRatio:
             else:
                 xfer = 0
                 severity = 0
-            self.pv.set(xfer, timestamp = timestamp, severity = severity)
+        else:
+            # If either input or output values are invalid
+            # force an INVALID state
+            xfer = 0
+            severity = 3
+
+        self.pv.set(xfer, timestamp = timestamp, severity = severity)
+
 
 
 class History:
