@@ -3,6 +3,7 @@
 import numpy
 import cothread
 from softioc import builder
+from config import LTB_THRESHOLD, BTS_THRESHOLD
 
 import intervals
 import bpm_list
@@ -28,7 +29,7 @@ class MS_Waveform(intervals.Waveform_Out):
 class TransferRatio:
     '''Manages transfer ratio for a single pair of values.'''
 
-    def __init__(self, name, input, output, low, lolo = None):
+    def __init__(self, name, input, output, threshold, low, lolo = None):
         self.name = name
         self.input = input
         self.output = output
@@ -36,13 +37,15 @@ class TransferRatio:
         if lolo is None:
             lolo = 0.5 * low
         self.lolo = lolo
+        self.threshold = threshold
         self.pv = builder.aIn(name, 0, 100, PREC = 2, EGU = '%', TSE = -2)
 
     def on_update(self, timestamp, values, valid):
         if valid[self.input] and valid[self.output]:
             input  = values[self.input]
             output = values[self.output]
-            if input > 0.05:
+
+            if input > self.threshold:
                 xfer = 100. * output / input
                 if xfer > self.low:
                     severity = 0
@@ -134,24 +137,24 @@ class Transfer:
         #   SR DCCT     6       MS          7
         self.transfers = [
             # Incremental transfers
-            TransferRatio('LB-01-02', 0, 1, 80),
-            TransferRatio('LB-02-03', 1, 2, 80),
-            TransferRatio('LB-03-BR', 2, 3, 50),
-            TransferRatio('BR-BS-01', 3, 4, 80),
-            TransferRatio('BS-01-02', 4, 5, 80),
-            TransferRatio('BS-SR',    5, 6, 60),
-            TransferRatio('BS-01-MS', 4, 7, 48),
-            TransferRatio('BS-MS',    5, 7, 60),
+            TransferRatio('LB-01-02', 0, 1, LTB_THRESHOLD, 80),
+            TransferRatio('LB-02-03', 1, 2, LTB_THRESHOLD, 80),
+            TransferRatio('LB-03-BR', 2, 3, LTB_THRESHOLD, 50),
+            TransferRatio('BR-BS-01', 3, 4, BTS_THRESHOLD, 80),
+            TransferRatio('BS-01-02', 4, 5, BTS_THRESHOLD, 80),
+            TransferRatio('BS-SR',    5, 6, BTS_THRESHOLD, 60),
+            TransferRatio('BS-01-MS', 4, 7, BTS_THRESHOLD, 48),
+            TransferRatio('BS-MS',    5, 7, BTS_THRESHOLD, 60),
             # Compound transfers from LB-01
-            TransferRatio('LI-LB-03', 0, 2, 64),
-            TransferRatio('LI-BR',    0, 3, 32),
-            TransferRatio('LI-BS-01', 0, 4, 26),
-            TransferRatio('LI-BS-02', 0, 5, 20),
-            TransferRatio('LI-SR',    0, 6, 12),
-            TransferRatio('LI-MS',    0, 7, 12),
+            TransferRatio('LI-LB-03', 0, 2, LTB_THRESHOLD, 64),
+            TransferRatio('LI-BR',    0, 3, LTB_THRESHOLD, 32),
+            TransferRatio('LI-BS-01', 0, 4, LTB_THRESHOLD, 26),
+            TransferRatio('LI-BS-02', 0, 5, LTB_THRESHOLD, 20),
+            TransferRatio('LI-SR',    0, 6, LTB_THRESHOLD, 12),
+            TransferRatio('LI-MS',    0, 7, LTB_THRESHOLD, 12),
             # Transfers from BR
-            TransferRatio('BR-SR',    3, 6, 38),
-            TransferRatio('BR-MS',    3, 7, 38),
+            TransferRatio('BR-SR',    3, 6, BTS_THRESHOLD, 38),
+            TransferRatio('BR-MS',    3, 7, BTS_THRESHOLD, 38),
         ]
 
         # Historical waveforms for booster and BTS-02 for 10 seconds, calculated
@@ -162,15 +165,15 @@ class Transfer:
 
         # Transfer efficiencies calculated as offsets into histories above
         self.transfers_2s = [
-            TransferRatio('BR-SR2', 0, 2, 38),      # 3 -> 6
-            TransferRatio('BS-SR2', 1, 2, 60),      # 5 -> 6
-            TransferRatio('BR-MS2', 0, 3, 38),      # 3 -> 7
-            TransferRatio('BS-MS2', 1, 3, 60)]      # 5 -> 7
+            TransferRatio('BR-SR2', 0, 2, BTS_THRESHOLD, 38),      # 3 -> 6
+            TransferRatio('BS-SR2', 1, 2, BTS_THRESHOLD, 60),      # 5 -> 6
+            TransferRatio('BR-MS2', 0, 3, BTS_THRESHOLD, 38),      # 3 -> 7
+            TransferRatio('BS-MS2', 1, 3, BTS_THRESHOLD, 60)]      # 5 -> 7
         self.transfers_10s = [
-            TransferRatio('BR-SR10', 0, 2, 38),
-            TransferRatio('BS-SR10', 1, 2, 60),
-            TransferRatio('BR-MS10', 0, 3, 38),
-            TransferRatio('BS-MS10', 1, 3, 60)]
+            TransferRatio('BR-SR10', 0, 2, BTS_THRESHOLD, 38),
+            TransferRatio('BS-SR10', 1, 2, BTS_THRESHOLD, 60),
+            TransferRatio('BR-MS10', 0, 3, BTS_THRESHOLD, 38),
+            TransferRatio('BS-MS10', 1, 3, BTS_THRESHOLD, 60)]
 
 
     def compute_ms_charge(self, values, valid, timestamps):
