@@ -95,7 +95,7 @@ class Transfer:
         ('BR01C-DI-DCCT-01:CHARGE', 200),   # 3
         ('BS-DI-ICT-01:SIGNAL',     99),    # 4
         ('BS-DI-ICT-02:SIGNAL',     99),    # 5
-        ('SR21C-DI-DCCT-01:SIGNAL', 200),   # 6
+        ('SR23C-DI-DCCT-01:SIGNAL', 200),   # 6
     ]
 
     SR_SIGNAL = 6
