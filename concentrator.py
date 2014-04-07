@@ -3,14 +3,14 @@
 import sys, os
 from pkg_resources import require
 
-require('cothread==2.10')
-require('iocbuilder==3.45')
+require('cothread==2.8')
+require('iocbuilder==3.23')
 
 from softioc import builder, softioc
 
 # A couple of identification PVs
 builder.SetDeviceName('CS-DI-IOC-01')
-builder.stringIn('WHOAMI', VAL = 'EBPM Concentrator')
+builder.stringIn('WHOAMI', VAL = 'Diagnostics Concentrator')
 builder.stringIn('HOSTNAME', VAL = os.uname()[1])
 
 builder.SetDeviceName('SR-DI-EBPM-01')
