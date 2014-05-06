@@ -244,9 +244,8 @@ class Controller_extra:
             '%s:OFFSETS' % name, length = controller.length, TSE = -2)
         self.delay_pv = builder.aIn('%s:DELAY' % name, TSE = -2)
 
-    def on_update(self, *args):
+    def on_update(self, values, valid, origin, timestamps, arrivals):
         now = time.time()
-        values, valid, origin, timestamps, arrivals = args
         self.valid_pv.set(valid, timestamp = origin)
         self.ts_pv.set(1e3 * (timestamps - origin), timestamp = origin)
         self.age_pv.set(1e3 * (arrivals - origin), timestamp = origin)
