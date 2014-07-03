@@ -13,8 +13,8 @@ def load_bpm_list():
     for line in file(BPM_list_file).readlines():
         if line and line[0] != '#':
             id_bpm = line.split()
-            if len(id_bpm) == 2:
-                id, bpm = id_bpm
+            if len(id_bpm) >= 2:
+                id, bpm = id_bpm[:2]
                 id = int(id)
                 if id in range and match.match(bpm):
                     yield (id, bpm)
