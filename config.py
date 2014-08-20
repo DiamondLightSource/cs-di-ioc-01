@@ -3,6 +3,7 @@
 # found in /home/ops/diagnostics/concentrator/concentrator.config
 
 import sys
+import os
 if 'C' in sys.argv[1:]:
     CONFIG_FILE = 'CS-DI-IOC-01.config'
 
@@ -21,9 +22,16 @@ if 'C' in sys.argv[1:]:
     catools.caput = caput
 
 else:
-    CONFIG_FILE = '/home/ops/diagnostics/concentrator/CS-DI-IOC-01.config'
+    CONFIG_FILE = '/home/ops/diagnostics/config/CS-DI-IOC-01.config'
 
-config_dir = {}
+# We start with a default configuration dictionary which is then overwritten
+# with settings loaded from target configuration file.
+config_dir = dict(
+    # Use local copy of FA ids file to avoid accidents if the configured file is
+    # changed.  This should be a faithful copy of the file stored in
+    #   /home/ops/diagnostics/config/CS-DI-IOC-01.config
+    BPM_list_file = os.path.join(os.path.dirname(__file__), 'fa-ids.sr')
+)
 execfile(CONFIG_FILE, {}, config_dir)
 
 __all__ = config_dir.keys()

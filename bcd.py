@@ -1,6 +1,5 @@
 '''Management of beam current dependency.'''
 
-import os.path
 import numpy
 import bisect
 
