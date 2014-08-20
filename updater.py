@@ -165,6 +165,10 @@ class CrossUpdater:
 def reset_bcd(value):
     CaPutAll('BCD_X_S', 0)
     CaPutAll('BCD_Y_S', 0)
+
+
+builder.SetDeviceName('SR-DI-EBPM-01')
+
 builder.boolOut('RESET_BCD', on_update = reset_bcd)
 
 

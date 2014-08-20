@@ -56,4 +56,5 @@ class AutoCurrent:
                     pvs, iir_scales[sane_currents], throw = False)
 
 
+builder.SetDeviceName('SR-DI-EBPM-01')
 AutoCurrent(config.ISCALE_TIMER_INTERVAL)

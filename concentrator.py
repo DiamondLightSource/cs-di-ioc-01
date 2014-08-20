@@ -13,9 +13,9 @@ builder.SetDeviceName('CS-DI-IOC-01')
 builder.stringIn('WHOAMI', VAL = 'Diagnostics Concentrator')
 builder.stringIn('HOSTNAME', VAL = os.uname()[1])
 
-builder.SetDeviceName('SR-DI-EBPM-01')
 
 from softioc import pvlog
+
 import enabled
 import updater
 import attenuation

@@ -147,6 +147,8 @@ class MonitorAgeReset(PositionWaveform):
 
 
 
+builder.SetDeviceName('SR-DI-EBPM-01')
+
 # For each IOC we record its health as one of the following values:
 #
 #   0 => Responding and enabled

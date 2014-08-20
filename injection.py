@@ -259,4 +259,5 @@ class Transfer:
             transfer.on_update(origin, histories, valid)
 
 
+builder.SetDeviceName('SR-DI-EBPM-01')
 Transfer()

@@ -135,4 +135,5 @@ class Attenuation:
         self.status.Update(ok)
 
 
+builder.SetDeviceName('SR-DI-EBPM-01')
 attenuation = Attenuation(ATTENUATOR_LIST, 10, 75)

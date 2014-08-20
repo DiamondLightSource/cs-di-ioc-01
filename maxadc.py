@@ -76,6 +76,8 @@ class CorrectorWaveform(MonitorSimpleWaveform):
         return MonitorArray(*args, pvs = self.corrector_pvs, **kwargs)
 
 
+builder.SetDeviceName('SR-DI-EBPM-01')
+
 MaxADC()
 
 builder.WaveformIn('BPMID', BPM_ids)
