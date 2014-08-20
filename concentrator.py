@@ -22,6 +22,7 @@ import attenuation
 import maxadc
 import interlock
 import autocurrent
+import bcd
 import injection
 import booster
 
