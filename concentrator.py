@@ -18,7 +18,7 @@ builder.SetDeviceName('SR-DI-EBPM-01')
 from softioc import pvlog
 import enabled
 import updater
-import bcd
+import attenuation
 import maxadc
 import interlock
 import autocurrent

@@ -5,7 +5,7 @@ from softioc import builder
 from bpm_list import *
 from monitor import *
 import enabled
-import bcd
+import attenuation
 import config
 
 
@@ -44,7 +44,7 @@ class MaxADC(MonitorWaveform):
 
         self.maxid.set(BPMS[numpy.argmax(maxadcwf)])
 
-        bcd.attenuation.UpdateMaxAdc(maxadcwf)
+        attenuation.attenuation.UpdateMaxAdc(maxadcwf)
 
 
 class CurrentWaveform:
