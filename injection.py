@@ -82,7 +82,11 @@ class History:
         self.valid[-1] = valid[self.index]
 
     def mean(self, length):
-        return self.history[-length:][self.valid[-length:]].mean()
+        data = self.history[-length:][self.valid[-length:]]
+        if len(data) > 0:
+            return data.mean()
+        else:
+            return 0;
 
 
 class Transfer:
