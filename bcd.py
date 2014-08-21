@@ -58,19 +58,18 @@ class BCD_PV:
         while True:
             self.ready.Wait()
 
-            try:
-                while self.target is not None:
-                    target = self.__compute_target()
-                    if target == self.target:
-                        self.target = None
+            while self.target is not None:
+                target = self.__compute_target()
+                if target == self.target:
+                    self.target = None
 
-                    print 'caput', self.name, target
-                    catools.caput(self.name, 1e-3 * target)
-                    cothread.Sleep(BCD_SLEW_INTERVAL)
-            except Exception, e:
-                print self.name, 'update failed:', e
-                self.target = None
-                self.on_update()
+                e = catools.caput(self.name, 1e-3 * target, throw = False)
+                if not e:
+                    print 'update failed:', e
+                    self.target = None
+                    self.on_update()
+
+                cothread.Sleep(BCD_SLEW_INTERVAL)
 
 
 # Clip values a, b to most extreme possible value against each limit.
