@@ -93,12 +93,13 @@ class Axis:
         self.length = length
         self.centre = centre
 
-        self.offset = builder.aOut(pv_name('OFFSET'),
-            EGU = 'um', PREC = 2,
-            always_update = True, on_update = self.set_offset)
-        self.angle = builder.aOut(pv_name('ANGLE'),
-            EGU = 'u rad', PREC = 2,
-            always_update = True, on_update = self.set_angle)
+        self.target_offset = builder.aOut(pv_name('OFFSET_S'),
+            EGU = 'um', PREC = 2, initial_value = 0,
+            always_update = True, on_update = self.set_target)
+        self.target_angle = builder.aOut(pv_name('ANGLE_S'),
+            EGU = 'u rad', PREC = 2, initial_value = 0,
+            always_update = True, on_update = self.set_target)
+
         self.min_offset = builder.aIn(
             pv_name('OFFSET:MIN'), PREC = 2, EGU = 'um')
         self.max_offset = builder.aIn(
@@ -115,6 +116,11 @@ class Axis:
         # names for use on the common display.  These mirrors are in microns.
         self.left_bcd  = builder.aIn(pv_name('BCD:L'), PREC = 2, EGU = 'um')
         self.right_bcd = builder.aIn(pv_name('BCD:R'), PREC = 2, EGU = 'um')
+
+        self.current_offset = builder.aIn(
+            pv_name('OFFSET'), EGU = 'um', PREC = 2)
+        self.current_angle = builder.aIn(
+            pv_name('ANGLE'), EGU = 'u rad', PREC = 2)
 
 
     # Coordinate conversion.  We're converting between centre oriented
@@ -191,13 +197,11 @@ class Axis:
         self.right_bcd.set(self.right.value)
 
         # Convert current values back into offset and angle and update the
-        # corresponding editing PVs.  This does mean that the editing PVs will
-        # see updates as the BCD values move.  We avoid a processing loop by not
-        # processing these updates.
+        # corresponding readback PVs.
         left, right = self.left.value, self.right.value
         offset, angle = self.bcd_to_coord(left, right)
-        self.offset.set(offset, process = False)
-        self.angle.set(angle, process = False)
+        self.current_offset.set(offset)
+        self.current_angle.set(angle)
 
         # Update the min and max limits accordingly.
         min_offset, max_offset, min_angle, max_angle = \
@@ -212,18 +216,13 @@ class Axis:
 
     # Computes end point coordinates from angle and offset and sets end points
     # accordingly after trimming to fit within acceptable bounds.
-    def set_coord(self, offset, angle):
+    def set_target(self, value):
+        offset = self.target_offset.get()
+        angle = self.target_angle.get()
         a, b = self.coord_to_bcd(offset, angle)
         a, b = constrain_bcd(a, b)
         self.left.put(a)
         self.right.put(b)
-
-    # Called to update the controlling values.
-    def set_offset(self, value):
-        self.set_coord(value, self.angle.get())
-
-    def set_angle(self, value):
-        self.set_coord(self.offset.get(), value)
 
 
 # A single BCD control is a pair of axes X & Y.
