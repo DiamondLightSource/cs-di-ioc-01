@@ -3,8 +3,8 @@
 import sys, os
 from pkg_resources import require
 
-require('cothread==2.8')
-require('iocbuilder==3.23')
+require('cothread==2.10')
+require('iocbuilder==3.45')
 
 from softioc import builder, softioc
 
