@@ -75,20 +75,26 @@ class BCD_PV:
 # Clip values a, b to most extreme possible value against each limit.
 def constrain_bcd(a, b):
     def clip(l, a, b):  return (l, l / a * b)
-    if constraint.get():
-        if a > BCD_LIMIT:       a, b = clip( BCD_LIMIT, a, b)
-        elif a < -BCD_LIMIT:    a, b = clip(-BCD_LIMIT, a, b)
-        if b > BCD_LIMIT:       b, a = clip( BCD_LIMIT, b, a)
-        elif b < -BCD_LIMIT:    b, a = clip(-BCD_LIMIT, b, a)
+    limit = bcd_limit.get()
+    if a > limit:       a, b = clip( limit, a, b)
+    elif a < -limit:    a, b = clip(-limit, a, b)
+    if b > limit:       b, a = clip( limit, b, a)
+    elif b < -limit:    b, a = clip(-limit, b, a)
     return (a, b)
 
 
 # BCD control for a single axis: controls end points (called left and right) in
 # response to settings of offset and angle.
 class Axis:
+    # All axes are accumulated into a list so we can perform operations on all
+    # axes, in particular refreshing limits when the bcd_limit changes.
+    all_axes = []
+
     def __init__(self, axis, length, centre, left, right):
         def pv_name(field):
             return '%s:%s' % (axis, field)
+
+        self.all_axes.append(self)
 
         self.length = length
         self.centre = centre
@@ -172,7 +178,7 @@ class Axis:
         c = offset
         d = angle * l
         k = self.centre
-        M = BCD_LIMIT
+        M = bcd_limit.get()
 
         return (
             max(k * d, -(1 - k) * d) - M,                   # Min offset
@@ -224,6 +230,13 @@ class Axis:
         self.left.put(a)
         self.right.put(b)
 
+    # This call will refresh the displayed control limits for all axes.
+    @classmethod
+    def refresh_all_limits(cls, _):
+        for axis in cls.all_axes:
+            axis.update_bcd()
+
+
 
 # A single BCD control is a pair of axes X & Y.
 class BCD:
@@ -261,12 +274,9 @@ def create_bcds():
 
     bcds = []
     for n in range(1, 25):
-        if n == 9:
-            # In straight 9 the upstream straight is J, the downstream is I
-            create_bcd(n, 'J', 'S')
-            create_bcd(n, 'I', 'C')
-        elif n == 13:
-            # In straight 13 the upstream straight is I, the downstream is J
+        if n in (9, 13):
+            # Both straights 9 and 13 have an upstream I straight and a
+            # downstream J straight
             create_bcd(n, 'I', 'S')
             create_bcd(n, 'J', 'C')
         else:
@@ -276,8 +286,8 @@ def create_bcds():
 
 
 builder.SetDeviceName('SR-DI-EBPM-01')
-constraint = builder.boolOut('BCD_LIMIT',
-    'Unconstrained', 'Constrained', initial_value = True)
+bcd_limit = builder.aOut('BCD_LIMIT', 0, 1000, EGU = 'um',
+    initial_value = BCD_LIMIT, on_update = Axis.refresh_all_limits)
 slew_rate = builder.aOut('SLEW_RATE',
     EGU = 'um/s', initial_value = BCD_SLEW_RATE)
 
