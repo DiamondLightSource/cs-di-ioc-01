@@ -13,6 +13,8 @@ builder.SetDeviceName('CS-DI-IOC-01')
 builder.stringIn('WHOAMI', VAL = 'Diagnostics Concentrator')
 builder.stringIn('HOSTNAME', VAL = os.uname()[1])
 
+builder.Action('RESTART', on_update = softioc.epicsExit)
+
 
 from softioc import pvlog
 
