@@ -24,14 +24,7 @@ if 'C' in sys.argv[1:]:
 else:
     CONFIG_FILE = '/home/ops/diagnostics/config/CS-DI-IOC-01.config'
 
-# We start with a default configuration dictionary which is then overwritten
-# with settings loaded from target configuration file.
-config_dir = dict(
-    # Use local copy of FA ids file to avoid accidents if the configured file is
-    # changed.  This should be a faithful copy of the file stored in
-    #   /home/ops/diagnostics/config/CS-DI-IOC-01.config
-    BPM_list_file = os.path.join(os.path.dirname(__file__), 'fa-ids.sr')
-)
+config_dir = {}
 execfile(CONFIG_FILE, {}, config_dir)
 
 __all__ = config_dir.keys()
