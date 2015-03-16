@@ -4,7 +4,7 @@ import sys, os
 from pkg_resources import require
 
 require('cothread==2.10')
-require('iocbuilder==3.45')
+require('epicsdbbuilder==1.0')
 
 from softioc import builder, softioc
 
