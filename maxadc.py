@@ -85,12 +85,6 @@ builder.WaveformIn('BPMID', BPM_ids)
 current = CurrentWaveform()
 
 
-# Free running deviation statistics
-MonitorWaveform('FR:STDX', tick = 0.2)
-MonitorWaveform('FR:PPX',  tick = 0.2)
-MonitorWaveform('FR:STDY', tick = 0.2)
-MonitorWaveform('FR:PPY',  tick = 0.2)
-
 # Postmortem statistics
 MonitorWaveform('PM:X_OFL',      tick = 1, datatype = bool)
 MonitorWaveform('PM:Y_OFL',      tick = 1, datatype = bool)
