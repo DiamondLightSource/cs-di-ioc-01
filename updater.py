@@ -39,18 +39,21 @@ class Updater:
     def __init__(self,
             name, enums = (), min = 0, max = 1, waveform = False,
             monitor = MonitorWaveform, caputall = CaPutAll,
-            auto_set = True, **extras):
+            auto_set = True, monitor_name = None, **extras):
 
         assert not (enums and waveform), 'Can\'t specify waveform of enums'
         writer_name = name + '_S'
+        if monitor_name is None:
+            monitor_name = writer_name
 
         self.caputall = caputall
-        self.monitor = monitor(writer_name, name, on_update = self.Update)
+        self.monitor = monitor(monitor_name, name, on_update = self.Update)
 
         if enums:
             min = 0
             max = len(enums) - 1
         self.name = name
+        self.monitor_name = monitor_name
         self.waveform = waveform
         self.min = min
         self.max = max
@@ -81,7 +84,8 @@ class Updater:
 
     def Validate(self, pv, value):
         '''Called asynchronously to validate the proposed new value.'''
-        if numpy.amin(value) < self.min or self.max < numpy.amax(value):
+        if self.min < self.max  and \
+           (numpy.amin(value) < self.min or self.max < numpy.amax(value)):
             print pv.name, 'invalid value:', value
             return False
         elif self.waveform and numpy.shape(value) != (self.length,):
@@ -95,7 +99,7 @@ class Updater:
     def WriteNewValue(self, value):
         self.monitor.UpdateDefault(value)
         self.writer.set(value)
-        self.caputall(self.name + '_S', value)
+        self.caputall(self.monitor_name, value)
 
     def Update(self, changed):
         self.at_target = (

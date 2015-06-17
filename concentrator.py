@@ -27,6 +27,7 @@ import autocurrent
 import bcd
 import injection
 import booster
+import sr
 
 builder.LoadDatabase()
 softioc.iocInit()
