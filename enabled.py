@@ -39,8 +39,8 @@ def EnabledCallback(value, index):
 
 
 def CheckForDropouts(old_health, new_health):
-    # Any freshly dropping out BPMs trigger a stop of fast feedback.
-    dropouts = (new_health == 2) > (old_health == 2)
+    # Transition from enabled to unreachable triggers a dropout event
+    dropouts = (new_health == 2) & (old_health == 0)
     if dropouts.any():
         dropout_list = list(nonzero(dropouts)[0])
         print 'Stopping fast feedback:', dropout_list, 'dropped out'
