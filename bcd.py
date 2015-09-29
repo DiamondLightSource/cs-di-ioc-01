@@ -90,21 +90,25 @@ class Axis:
     # axes, in particular refreshing limits when the bcd_limit changes.
     all_axes = []
 
-    def __init__(self, axis, length, centre, left, right):
+    def __init__(self, parent, axis, length, centre, left, right):
         def pv_name(field):
             return '%s:%s' % (axis, field)
 
         self.all_axes.append(self)
+
+        self.parent = parent
 
         self.length = length
         self.centre = centre
 
         self.target_offset = builder.aOut(pv_name('OFFSET_S'),
             EGU = 'um', PREC = 2, initial_value = 0,
-            always_update = True, on_update = self.set_target)
+            always_update = True, validate = self.check_enabled,
+            on_update = self.set_target)
         self.target_angle = builder.aOut(pv_name('ANGLE_S'),
             EGU = 'u rad', PREC = 2, initial_value = 0,
-            always_update = True, on_update = self.set_target)
+            always_update = True, validate = self.check_enabled,
+            on_update = self.set_target)
 
         self.min_offset = builder.aIn(
             pv_name('OFFSET:MIN'), PREC = 2, EGU = 'um')
@@ -127,6 +131,10 @@ class Axis:
             pv_name('OFFSET'), EGU = 'um', PREC = 2)
         self.current_angle = builder.aIn(
             pv_name('ANGLE'), EGU = 'u rad', PREC = 2)
+
+
+    def check_enabled(self, pv, value):
+        return self.parent.check_enabled()
 
 
     # Coordinate conversion.  We're converting between centre oriented
@@ -250,8 +258,13 @@ class BCD:
         right = bpm_list.BPMS[right_id - 1]
 
         builder.SetDeviceName('SR-DI-%s-01' % name)
-        self.x = Axis('X', length, centre, left, right)
-        self.y = Axis('Y', length, centre, left, right)
+        self.enable_pv = builder.boolOut(
+            'ENABLE_S', 'Disabled', 'Enabled', initial_value = True)
+        self.x = Axis(self, 'X', length, centre, left, right)
+        self.y = Axis(self, 'Y', length, centre, left, right)
+
+    def check_enabled(self):
+        return self.enable_pv.get()
 
 
 # Create BCD controller for each straight.
