@@ -5,7 +5,7 @@ from pkg_resources import require
 
 require('cothread==2.13')
 require('numpy==1.11.1')
-require('epicsdbbuilder==1.0')
+require('epicsdbbuilder==1.1')
 
 from softioc import builder, softioc
 
