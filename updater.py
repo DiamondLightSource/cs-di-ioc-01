@@ -8,6 +8,8 @@ from softioc import builder
 from bpm_list import *
 from monitor import *
 
+import config
+
 
 EnablerEnums = ['Disabled', 'Enabled']
 
@@ -193,5 +195,5 @@ DetuneUpdater = Updater('CK:DETUNE', min=-1000, max=1000, EGU='ticks')
 
 CrossUpdater('MODE',
     (AutoswUpdater, DscUpdater, DetuneUpdater,),
-    ((0, 0, 0), (1, 2, 400),),
+    ((0, 0, 0), (1, 2, config.ORBIT_DETUNE),),
     ('Tune', 'Orbit',), initial_value = 1)
