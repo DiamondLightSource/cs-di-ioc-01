@@ -38,19 +38,6 @@ def EnabledCallback(value, index):
     Enabled[index] = value
 
 
-def CheckForDropouts(old_health, new_health):
-    # Transition from enabled to unreachable triggers a dropout event
-    dropouts = (new_health == 2) & (old_health == 0)
-    if dropouts.any():
-        dropout_list = list(nonzero(dropouts)[0])
-        print 'Stopping fast feedback:', dropout_list, 'dropped out'
-        stop_pvs = ['SR%02dA-CS-FOFB-01:FASTART' % (c+1) for c in range(24)]
-        catools.caput(stop_pvs, 0, throw = False)
-        catools.caput(
-            'SR01A-CS-FOFB-01:UNREACHABLE', BPMS[dropout_list[0]],
-            throw = False)
-
-
 def TimerTick():
     # Age all the non responding entries and identify those which have passed
     # the age limit.
@@ -68,8 +55,6 @@ def TimerTick():
     #   0 => enabled and operating normally
     NewHealth = where(Aged, 2, 1 - Enabled)
     if (NewHealth != Health.get()).any():
-        CheckForDropouts(Health.get(), NewHealth)
-
         Health.set(NewHealth)
         global EnabledList
         EnabledList = nonzero(NewHealth == 0)
