@@ -278,9 +278,10 @@ def create_bcds():
     # Creates a BCD controller named with given prefix.  The suffix is used to
     # identify the downstream BPM for the straight, this is C for most straights
     # and S for the two special straights in cells 9 and 13.
-    def create_bcd(n, prefix, suffix):
+    def create_bcd(n, prefix, suffix, id = 1):
         name = '%s%02d' % (prefix, n)
-        bpm_id = bpm_list.BPM_name_id['SR%02d%s-DI-EBPM-01' % (n, suffix)]
+        bpm_id = bpm_list.BPM_name_id[
+            'SR%02d%s-DI-EBPM-%02d' % (n, suffix, id)]
         length = BCD_SPECIAL_LENGTHS.get(name, default_length(n))
         centre = BCD_SPECIAL_CENTRES.get(name, 0.5)
         bcds.append(BCD(name, bpm_id, length, centre))
@@ -295,6 +296,9 @@ def create_bcds():
         else:
             # Normal straights are named I and end at a C-1 BPM.
             create_bcd(n, 'I', 'C')
+            if n == 2:
+                # Special second straight for J2
+                create_bcd(n, 'J', 'C', 5)
     return bcds
 
 
