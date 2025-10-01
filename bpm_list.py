@@ -10,7 +10,7 @@ from config import *
 def load_bpm_list():
     match = re.compile(BPM_pattern)
     range = set(BPM_id_range)
-    for line in file(BPM_list_file).readlines():
+    for line in open(BPM_list_file).readlines():
         if line and line[0] != '#':
             id_bpm = line.split()
             if len(id_bpm) >= 2:

@@ -26,10 +26,10 @@ def CaPutAll(pv, value, make_pvs = BPMpvs):
     def put_task():
         ok = catools.caput(make_pvs(pv), value, throw = False)
         if not numpy.all(ok):
-            print 'caput failed:'
+            print('caput failed:')
             for result in ok:
                 if not result:
-                    print '   ', str(result)
+                    print('   ', str(result))
                     break       # for the moment...
     cothread.Spawn(put_task)
 

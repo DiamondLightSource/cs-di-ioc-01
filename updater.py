@@ -88,11 +88,11 @@ class Updater:
         '''Called asynchronously to validate the proposed new value.'''
         if self.min < self.max  and \
            (numpy.amin(value) < self.min or self.max < numpy.amax(value)):
-            print pv.name, 'invalid value:', value
+            print(pv.name, 'invalid value:', value)
             return False
         elif self.waveform and numpy.shape(value) != (self.length,):
             # Check waveform is exactly the right size
-            print pv.name, 'wrong array size:', numpy.shape(value)
+            print(pv.name, 'wrong array size:', numpy.shape(value))
             return False
         else:
             # If get here, passed all tests.
@@ -155,7 +155,7 @@ class CrossUpdater:
             self.setting = self.lookup[index]
             self.index = index
         except:
-            print 'invalid value', index
+            print('invalid value', index)
             return False
         else:
             for pv, value in zip(self.pvlist, self.setting):

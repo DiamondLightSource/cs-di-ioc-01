@@ -80,15 +80,15 @@ builder.SetDeviceName('SR-DI-EBPM-01')
 
 MaxADC()
 
-builder.WaveformIn('BPMID', BPM_ids)
+builder.WaveformIn('BPMID', list(BPM_ids))
 
 current = CurrentWaveform()
 
 
 # Postmortem statistics
-MonitorWaveform('PM:X_OFL',      tick = 1, datatype = bool)
-MonitorWaveform('PM:Y_OFL',      tick = 1, datatype = bool)
-MonitorWaveform('PM:ADC_OFL',    tick = 1, datatype = bool)
+MonitorWaveform('PM:X_OFL',      tick = 1, datatype = numpy.uint8)
+MonitorWaveform('PM:Y_OFL',      tick = 1, datatype = numpy.uint8)
+MonitorWaveform('PM:ADC_OFL',    tick = 1, datatype = numpy.uint8)
 
 MonitorWaveform('PM:X_OFFSET',   tick = 1, datatype = int, offset = 15384)
 MonitorWaveform('PM:Y_OFFSET',   tick = 1, datatype = int, offset = 15384)

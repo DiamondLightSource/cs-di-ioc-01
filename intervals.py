@@ -16,14 +16,12 @@
 # How do we link updates to values?  Either by index in an array or by name.
 # Clearly the Python way is by name.
 
-
 import time
 import numpy
 
 import cothread
 from cothread import catools
 from softioc import builder
-from autosuper import autosuper
 
 
 VERBOSE = False
@@ -32,7 +30,7 @@ VERBOSE = False
 INVALID_severity = 3
 
 
-class ControllerBase(autosuper):
+class ControllerBase:
     '''Captures common features of all controllers.'''
 
     def __init__(self,
@@ -125,7 +123,7 @@ class IntervalController(ControllerBase):
             interval
         '''
 
-        self.__super.__init__(
+        super().__init__(
             delay, 1e-3 * delay, values, on_update, history_length,
             finish_early)
 
@@ -167,7 +165,7 @@ class TriggeredController(ControllerBase):
         finish_early
             If set will complete as soon as all values are ready.
         '''
-        self.__super.__init__(delay, None, values, on_update, 1, finish_early)
+        super().__init__(delay, None, values, on_update, 1, finish_early)
         self.active = False
 
     def _get_interval(self, index, timestamp):
@@ -234,8 +232,8 @@ class Controller_extra:
         self.controller = controller
         controller.hook_onupdate(self.on_update)
         self.valid_pv = builder.Waveform(
-            '%s:VALID' % name, length = controller.length, datatype = bool,
-            TSE = -2)
+            '%s:VALID' % name, length = controller.length,
+            datatype = numpy.uint8, TSE = -2)
         self.ts_pv = builder.Waveform(
             '%s:TS' % name, length = controller.length, TSE = -2)
         self.age_pv = builder.Waveform(
@@ -258,7 +256,7 @@ class Controller_extra:
 # ------------------------------------------------------------------------------
 # ValueBase
 
-class ValueBase(autosuper):
+class ValueBase:
     def __init__(self, name, factory, on_update = None):
         self.name = name
         self.factory = factory
@@ -279,7 +277,7 @@ class ValueBase(autosuper):
             self.on_update(value)
         else:
             if VERBOSE:
-                print 'not valid', self.name
+                print( 'not valid', self.name)
         return value
 
     # Called by the controller to start a new interval.
@@ -301,7 +299,7 @@ class ValueBase(autosuper):
                 value_base = self.values[interval]
             except IndexError:
                 if VERBOSE:
-                    print 'Discarding early value', self.name, interval
+                    print('Discarding early value', self.name, interval)
             else:
                 value_base.update(timestamp, value, *extra)
                 if interval == 0 and value_base.valid:
@@ -309,7 +307,7 @@ class ValueBase(autosuper):
         else:
             # Value is too old, all we can do is discard it.
             if VERBOSE:
-                print 'Discarding late value', self.name, interval
+                print('Discarding late value', self.name, interval)
 
     def on_update(self, value):
         '''This method is called on completion of updates.'''
@@ -348,7 +346,7 @@ class UpdateWaveform:
         self.value        = numpy.zeros(length) + numpy.nan
         self.arrival_wf   = numpy.zeros(length) + numpy.nan
         self.timestamp_wf = numpy.zeros(length) + numpy.nan
-        self.valid_wf     = numpy.zeros(length, dtype = bool)
+        self.valid_wf     = numpy.zeros(length, dtype = numpy.uint8)
         self.severity_wf  = \
             numpy.zeros(length, dtype = numpy.uint8) + INVALID_severity
 
@@ -378,14 +376,14 @@ class Value(ValueBase):
     '''Specifies a single updating value.'''
 
     def __init__(self, name, **kargs):
-        self.__super.__init__(name, UpdateValue, **kargs)
+        super().__init__(name, UpdateValue, **kargs)
 
 
 class Value_PV(Value):
     '''The usual case for a single data source: a single PV.'''
 
     def __init__(self, pv, **kargs):
-        self.__super.__init__(pv, **kargs)
+        super().__init__(pv, **kargs)
         catools.camonitor(pv, self.__pv_update, format = catools.FORMAT_TIME)
 
     def __pv_update(self, value):
@@ -399,7 +397,7 @@ class Waveform(ValueBase):
     '''Specifies a waveform of updating values.'''
 
     def __init__(self, name, length, validate = None, **kargs):
-        self.__super.__init__(name, lambda: UpdateWaveform(length), **kargs)
+        super().__init__(name, lambda: UpdateWaveform(length), **kargs)
 
         if validate is not None:
             self.validate = validate
@@ -417,7 +415,7 @@ class Waveform_PV(Waveform):
     the contributing PVs.'''
 
     def __init__(self, name, pvs, **kargs):
-        self.__super.__init__(name, len(pvs), **kargs)
+        super().__init__(name, len(pvs), **kargs)
         catools.camonitor(pvs, self.__pv_update, format = catools.FORMAT_TIME)
 
     def __pv_update(self, value, index):
@@ -447,17 +445,17 @@ class Waveform_Out(Waveform_PV):
     '''Simple waveform with associated timestamps.'''
 
     def __init__(self, name, pvs, **kargs):
-        self.__super.__init__(name, pvs, **kargs)
+        super().__init__(name, pvs, **kargs)
         self.wf = Waveform_TS(len(pvs), name)
 
     def on_update(self, value):
-        self.__super.on_update(value)
+        super().on_update(value)
         self.wf.on_update(value)
 
 
 class MaskedWaveform(Waveform_PV):
     def __init__(self, name, pvs, mask = None, offset = 0, **kargs):
-        self.__super.__init__(name, pvs, **kargs)
+        super().__init__(name, pvs, **kargs)
 
         # The mask is a mutable pair consisting of a boolean mask of values (in
         # the first element) to be replaced with the default (in the second
@@ -471,7 +469,7 @@ class MaskedWaveform(Waveform_PV):
             length, '%s:RAW' % name, '%s:TS' % name, '%s:AGE' % name)
 
     def on_update(self, value):
-        self.__super.on_update(value)
+        super().on_update(value)
         self.wf_ts.on_update(value)
 
         if self.mask:

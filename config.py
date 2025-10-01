@@ -12,7 +12,7 @@ if 'C' in sys.argv[1:]:
         ok = False
         def __init__(self, name): self.name = name
     def caput(pvs, *args, **kargs):
-        print 'caput', pvs, args, kargs
+        print('caput', pvs, args, kargs)
         if isinstance(pvs, str):
             return Fail(pvs)
         else:
@@ -25,7 +25,7 @@ else:
     CONFIG_FILE = '/home/ops/diagnostics/config/CS-DI-IOC-01.config'
 
 config_dir = {}
-execfile(CONFIG_FILE, {}, config_dir)
+exec(open(CONFIG_FILE).read(), {}, config_dir)
 
-__all__ = config_dir.keys()
+__all__ = list(config_dir.keys())
 globals().update(config_dir)

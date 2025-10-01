@@ -65,7 +65,7 @@ class BCD_PV:
 
                 e = catools.caput(self.name, 1e-3 * target, throw = False)
                 if not e:
-                    print 'update failed:', e
+                    print('update failed:', e)
                     self.target = None
                     self.on_update()
 

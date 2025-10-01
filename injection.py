@@ -18,11 +18,11 @@ class MS_Waveform(intervals.Waveform_Out):
     ms_pvs = ['%s:MS:DELTAI' % bpm for bpm in bpm_list.BPMS]
 
     def __init__(self):
-        self.__super.__init__('MS:DELTAI', self.ms_pvs)
+        super().__init__('MS:DELTAI', self.ms_pvs)
         self.mean_pv = intervals.Waveform_Mean('MS:DELTAI:MEAN')
 
     def on_update(self, value):
-        self.__super.on_update(value)
+        super().on_update(value)
         self.mean_pv.on_update(value)
 
 
