@@ -249,12 +249,12 @@ class Transfer:
 
         # 2s = 10 samples
         histories = [history.mean(10) for history in self.histories]
-        valid = map(numpy.isfinite, histories)
+        valid = list(map(numpy.isfinite, histories))
         for transfer in self.transfers_2s:
             transfer.on_update(origin, histories, valid)
         # 10s = 50 samples
         histories = [history.mean(50) for history in self.histories]
-        valid = map(numpy.isfinite, histories)
+        valid = list(map(numpy.isfinite, histories))
         for transfer in self.transfers_10s:
             transfer.on_update(origin, histories, valid)
 

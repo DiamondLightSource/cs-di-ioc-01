@@ -101,10 +101,15 @@ class PositionWaveform(MonitorWaveform):
         MonitorWaveform.Update(self)
 
         active_array = self.active_value
+
         # Quick and dirty hack if nothing is live to ensure that none of the
         # array inspections routines below fail.
 #         if len(active_array) < 2:  active_array = array([0.0, 0.0])
-        self.std.set(std(active_array))
+        if len(active_array) < 2:
+            print('too small')
+            return
+
+        self.std.set(numpy.std(active_array))
         self.mean.set(mean(active_array))
         self.min.set(min(active_array))
         self.max.set(max(active_array))
