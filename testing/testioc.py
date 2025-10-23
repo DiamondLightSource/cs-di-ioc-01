@@ -12,8 +12,8 @@ sys.path.append('..')
 
 # A couple of identification PVs
 builder.SetDeviceName('CS-DI-IOC-01')
-builder.stringIn('WHOAMI', VAL = 'EBPM Concentrator')
-builder.stringIn('HOSTNAME', VAL = os.uname()[1])
+builder.stringIn('WHOAMI', initial_val = 'EBPM Concentrator')
+builder.stringIn('HOSTNAME', initial_val = os.uname()[1])
 
 import injection
 import waveforms

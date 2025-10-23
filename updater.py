@@ -100,7 +100,10 @@ class Updater:
 
     def WriteNewValue(self, value):
         self.monitor.UpdateDefault(value)
-        self.writer.set(value)
+        if self.waveform:
+            self.writer.set(value)
+        else: # mmbOut or longOut which must be integer type
+            self.writer.set(int(value))
         self.caputall(self.monitor_name, value)
 
     def Update(self, changed):
@@ -118,7 +121,12 @@ class Updater:
 
     # Called during startup after things have had a moment to settle
     def OnStartup(self):
-        self.writer.set(self.GetValue())
+        val = self.GetValue()
+        if self.waveform:
+            self.writer.set(val)
+        else:  # mmbOut or longOut which must be integer type
+            self.writer.set(int(val))
+        
         self.Update(False)
 
 

@@ -7,8 +7,8 @@ from softioc import builder, softioc
 
 # A couple of identification PVs
 builder.SetDeviceName('CS-DI-IOC-01')
-builder.stringIn('WHOAMI', VAL = 'Diagnostics Concentrator')
-builder.stringIn('HOSTNAME', VAL = os.uname()[1])
+builder.stringIn('WHOAMI', initial_value = 'Diagnostics Concentrator')
+builder.stringIn('HOSTNAME', initial_value = os.uname()[1])
 
 builder.Action('RESTART', on_update = softioc.epicsExit)
 

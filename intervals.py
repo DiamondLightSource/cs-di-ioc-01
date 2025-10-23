@@ -346,7 +346,7 @@ class UpdateWaveform:
         self.value        = numpy.zeros(length) + numpy.nan
         self.arrival_wf   = numpy.zeros(length) + numpy.nan
         self.timestamp_wf = numpy.zeros(length) + numpy.nan
-        self.valid_wf     = numpy.zeros(length, dtype = numpy.uint8)
+        self.valid_wf     = numpy.zeros(length, dtype = bool)
         self.severity_wf  = \
             numpy.zeros(length, dtype = numpy.uint8) + INVALID_severity
 
