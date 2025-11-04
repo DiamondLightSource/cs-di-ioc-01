@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: concentrator
+  title: concentrator
+  description: Collects readings and simple controls for all storage ring BPMs
+spec:
+  type: service
+  lifecycle: production
+  owner: group:default/accelerator-controls
