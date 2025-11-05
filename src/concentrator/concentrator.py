@@ -27,6 +27,31 @@ def start_concentrator():
     import concentrator.sr as sr
     import concentrator.updater as updater
 
+    # 1) Core health/enable state
+    enabled.setup()
+
+    # 2) Common updaters; capture the attenuation updater
+    updaters = updater.setup()
+    atten_updater = updaters["AttenUpdater"]
+
+    # 3) Attenuation control (needs the updater)
+    atten = attenuation.setup(atten_updater=atten_updater)
+
+    # 4) MaxADC and related waveforms (hook attenuation auto logic)
+    maxadc.setup(on_maxadc_update=atten.UpdateMaxAdc)
+
+    # 5) Auto current scaling (needs maxadc.current created)
+    autocurrent.setup()
+
+    # 6) BCD
+    bcd.setup_bcd()
+
+    # 7) Booster, EVR, Interlocks, Injection
+    booster.setup()
+    sr.setup()
+    interlock.setup()
+    injection.setup()
+
     builder.LoadDatabase()
     softioc.iocInit()
     softioc.interactive_ioc(globals())

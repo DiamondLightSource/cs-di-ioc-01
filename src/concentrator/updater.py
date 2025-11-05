@@ -198,39 +198,47 @@ def reset_bcd(value):
     CaPutAll("BCD_Y_S", 0)
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
+def setup(device_name="SR-DI-EBPM-01"):
+    """Register the common updater PVs and return key updater instances."""
+    builder.SetDeviceName(device_name)
 
-builder.boolOut("RESET_BCD", on_update=reset_bcd)
+    builder.boolOut("RESET_BCD", on_update=reset_bcd)
 
+    MonitorSimpleWaveform("CF:GOLDEN_X_S")
+    MonitorSimpleWaveform("CF:GOLDEN_Y_S")
+    MonitorSimpleWaveform("CF:BCD_X_S")
+    MonitorSimpleWaveform("CF:BCD_Y_S")
 
-MonitorSimpleWaveform("CF:GOLDEN_X_S")
-MonitorSimpleWaveform("CF:GOLDEN_Y_S")
-MonitorSimpleWaveform("CF:BCD_X_S")
-MonitorSimpleWaveform("CF:BCD_Y_S")
+    Updater("FT:ENABLE", enums=EnablerEnums)
+    Updater("FR:ENABLE", enums=EnablerEnums)
+    Updater("BN:ENABLE", enums=EnablerEnums)
 
-Updater("FT:ENABLE", enums=EnablerEnums)
-Updater("FR:ENABLE", enums=EnablerEnums)
-Updater("BN:ENABLE", enums=EnablerEnums)
+    autosw = Updater("CF:AUTOSW", enums=["Manual", "Automatic"])
+    dsc = Updater("CF:DSC", enums=["Fixed gains", "Unity gains", "Automatic"])
+    atten = Updater("CF:ATTEN", min=0, max=62, EGU="dB")
+    detune = Updater("CK:DETUNE", min=-1000, max=1000, EGU="ticks")
 
-AutoswUpdater = Updater("CF:AUTOSW", enums=["Manual", "Automatic"])
-DscUpdater = Updater("CF:DSC", enums=["Fixed gains", "Unity gains", "Automatic"])
-AttenUpdater = Updater("CF:ATTEN", min=0, max=62, EGU="dB")
-DetuneUpdater = Updater("CK:DETUNE", min=-1000, max=1000, EGU="ticks")
+    CrossUpdater(
+        "MODE",
+        (
+            autosw,
+            dsc,
+            detune,
+        ),
+        (
+            (0, 0, 0),
+            (1, 2, config.ORBIT_DETUNE),
+        ),
+        (
+            "Tune",
+            "Orbit",
+        ),
+        initial_value=1,
+    )
 
-CrossUpdater(
-    "MODE",
-    (
-        AutoswUpdater,
-        DscUpdater,
-        DetuneUpdater,
-    ),
-    (
-        (0, 0, 0),
-        (1, 2, config.ORBIT_DETUNE),
-    ),
-    (
-        "Tune",
-        "Orbit",
-    ),
-    initial_value=1,
-)
+    return {
+        "AutoswUpdater": autosw,
+        "DscUpdater": dsc,
+        "AttenUpdater": atten,
+        "DetuneUpdater": detune,
+    }

@@ -31,9 +31,9 @@ def EVRUpdater(name, monitor_name=None, **kargs):
     )
 
 
-builder.SetDeviceName("SR-DI-EVR-01")
-
-EVRUpdater(
-    "TRIG:MODE", enums=["", "Normal", "Synchronised", "Triggered", "Extra Trigger"]
-)
-EVRUpdater("OT2D", "SET_HW.OT2D", max=0)
+def setup(device_name="SR-DI-EVR-01"):
+    builder.SetDeviceName(device_name)
+    EVRUpdater(
+        "TRIG:MODE", enums=["", "Normal", "Synchronised", "Triggered", "Extra Trigger"]
+    )
+    EVRUpdater("OT2D", "SET_HW.OT2D", max=0)

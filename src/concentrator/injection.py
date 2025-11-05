@@ -255,5 +255,6 @@ class Transfer:
             transfer.on_update(origin, histories, valid)
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
-Transfer()
+def setup(device_name="SR-DI-EBPM-01"):
+    builder.SetDeviceName(device_name)
+    Transfer()

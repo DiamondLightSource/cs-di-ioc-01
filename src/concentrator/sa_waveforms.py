@@ -20,5 +20,8 @@ class SA_Waveforms:
         pass
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
-# SA_Waveforms()
+def setup(device_name="SR-DI-EBPM-01", create=False):
+    builder.SetDeviceName(device_name)
+    if create:
+        return SA_Waveforms()
+    return None

@@ -89,7 +89,7 @@ Initial ideas for booster concentrator PVs. Booster-specific PV implementations 
 Manages collections of updating waveforms.
 
 **`sa_waveforms.py`**  
-Initial implementation of SA waveforms (may not be optimal).
+Initial implementation of SA waveforms not currently used.
 
 ## Concentrated Waveforms
 

@@ -60,5 +60,8 @@ class AutoCurrent:
                 ok = catools.caput(pvs, iir_scales[sane_currents], throw=False)
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
-AutoCurrent(config.ISCALE_TIMER_INTERVAL)
+def setup(device_name="SR-DI-EBPM-01", interval=None):
+    builder.SetDeviceName(device_name)
+    if interval is None:
+        interval = config.ISCALE_TIMER_INTERVAL
+    return AutoCurrent(interval)

@@ -1,7 +1,6 @@
 import numpy
 from softioc import builder
 
-import concentrator.attenuation as attenuation
 import concentrator.config as config
 import concentrator.enabled as enabled
 from concentrator.bpm_list import *
@@ -9,9 +8,13 @@ from concentrator.monitor import *
 
 MAX_ADC = 2**15
 
+# Expose created instances after setup()
+current = None
+maxadc_instance = None
+
 
 class MaxADC(MonitorWaveform):
-    def __init__(self):
+    def __init__(self, on_maxadc_update=None):
         MonitorWaveform.__init__(self, "SA:MAXADC_PC", timestamps=True)
 
         self.maxadc = builder.aIn("MAXADC_PC", 0.0, 100, EGU="%", PREC=1)
@@ -22,6 +25,7 @@ class MaxADC(MonitorWaveform):
         self.maxadc_raw = builder.longIn("MAXADC", 0, MAX_ADC)
 
         self.severity = numpy.zeros(BPM_count, dtype=int)
+        self._on_maxadc_update = on_maxadc_update
 
     def MonitorCallback(self, value, index):
         MonitorWaveform.MonitorCallback(self, value, index)
@@ -42,7 +46,9 @@ class MaxADC(MonitorWaveform):
 
         self.maxid.set(BPMS[numpy.argmax(maxadcwf)])
 
-        attenuation.attenuation.UpdateMaxAdc(maxadcwf)
+        # _on_maxadc_update is used for updating the attenuator
+        if self._on_maxadc_update:
+            self._on_maxadc_update(maxadcwf)
 
 
 class CurrentWaveform:
@@ -73,42 +79,46 @@ class CorrectorWaveform(MonitorSimpleWaveform):
         return MonitorArray(*args, pvs=self.corrector_pvs, **kwargs)
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
+def setup(device_name="SR-DI-EBPM-01", on_maxadc_update=None):
+    """Register MaxADC and related waveforms. Returns dict with instances."""
+    global current, maxadc_instance
 
-MaxADC()
+    builder.SetDeviceName(device_name)
 
-builder.WaveformIn("BPMID", list(BPM_ids))
+    maxadc_instance = MaxADC(on_maxadc_update=on_maxadc_update)
+    builder.WaveformIn("BPMID", list(BPM_ids))
 
-current = CurrentWaveform()
+    current = CurrentWaveform()
 
+    # Postmortem statistics
+    MonitorWaveform("PM:X_OFL", tick=1, datatype=numpy.uint8)
+    MonitorWaveform("PM:Y_OFL", tick=1, datatype=numpy.uint8)
+    MonitorWaveform("PM:ADC_OFL", tick=1, datatype=numpy.uint8)
 
-# Postmortem statistics
-MonitorWaveform("PM:X_OFL", tick=1, datatype=numpy.uint8)
-MonitorWaveform("PM:Y_OFL", tick=1, datatype=numpy.uint8)
-MonitorWaveform("PM:ADC_OFL", tick=1, datatype=numpy.uint8)
+    MonitorWaveform("PM:X_OFFSET", tick=1, datatype=int, offset=15384)
+    MonitorWaveform("PM:Y_OFFSET", tick=1, datatype=int, offset=15384)
+    MonitorWaveform("PM:ADC_OFFSET", tick=1, datatype=int, offset=15384)
 
-MonitorWaveform("PM:X_OFFSET", tick=1, datatype=int, offset=15384)
-MonitorWaveform("PM:Y_OFFSET", tick=1, datatype=int, offset=15384)
-MonitorWaveform("PM:ADC_OFFSET", tick=1, datatype=int, offset=15384)
+    # Interlocks
+    MonitorSimpleWaveform("IL:MINX", tick=1)
+    MonitorSimpleWaveform("IL:MAXX", tick=1)
+    MonitorSimpleWaveform("IL:MINY", tick=1)
+    MonitorSimpleWaveform("IL:MAXY", tick=1)
 
-# Interlocks
-MonitorSimpleWaveform("IL:MINX", tick=1)
-MonitorSimpleWaveform("IL:MAXX", tick=1)
-MonitorSimpleWaveform("IL:MINY", tick=1)
-MonitorSimpleWaveform("IL:MAXY", tick=1)
+    # Communication controller statistics
+    MonitorSimpleWaveform("FF:PROCESS_TIME_US", tick=1)
+    MonitorSimpleWaveform("FF:RXFIFO", tick=1)
+    MonitorSimpleWaveform("FF:TXFIFO", tick=1)
+    MonitorSimpleWaveform("FF:SOFT_ERR", tick=1)
+    MonitorSimpleWaveform("FF:HARD_ERR", tick=1)
+    MonitorSimpleWaveform("FF:FRAME_ERR", tick=1)
+    MonitorSimpleWaveform("FF:BPM_COUNT", tick=1)
 
-# Communication controller statistics
-MonitorSimpleWaveform("FF:PROCESS_TIME_US", tick=1)
-MonitorSimpleWaveform("FF:RXFIFO", tick=1)
-MonitorSimpleWaveform("FF:TXFIFO", tick=1)
-MonitorSimpleWaveform("FF:SOFT_ERR", tick=1)
-MonitorSimpleWaveform("FF:HARD_ERR", tick=1)
-MonitorSimpleWaveform("FF:FRAME_ERR", tick=1)
-MonitorSimpleWaveform("FF:BPM_COUNT", tick=1)
+    # Corrector waveforms
+    builder.SetDeviceName("SR-CS-FOFB-01")
+    builder.WaveformIn("CELLID", 1 + numpy.arange(24))
+    CorrectorWaveform("TFMAX", tick=1)
+    CorrectorWaveform("TFMIN", tick=1)
+    CorrectorWaveform("NODES", tick=1)
 
-# Corrector waveforms
-builder.SetDeviceName("SR-CS-FOFB-01")
-builder.WaveformIn("CELLID", 1 + numpy.arange(24))
-CorrectorWaveform("TFMAX", tick=1)
-CorrectorWaveform("TFMIN", tick=1)
-CorrectorWaveform("NODES", tick=1)
+    return {"current": current, "maxadc": maxadc_instance}

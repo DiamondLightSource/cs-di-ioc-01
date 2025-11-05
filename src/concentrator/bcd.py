@@ -312,17 +312,28 @@ def create_bcds():
     return bcds
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
-bcd_limit = builder.aOut(
-    "BCD_LIMIT",
-    0,
-    1000,
-    EGU="um",
-    initial_value=BCD_LIMIT,
-    on_update=Axis.refresh_all_limits,
-)
-slew_rate = builder.aOut("SLEW_RATE", EGU="um/s", initial_value=BCD_SLEW_RATE)
+# Define these as globals for now for simplicity
+bcd_limit = None
+slew_rate = None
+bcds = None
 
-# We hang onto the created BCD instances for debugging in case we decide to do
-# some poking about in the live system!
-bcds = create_bcds()
+
+def setup_bcd(device_name="SR-DI-EBPM-01"):
+    """Create BCD controllers and related PVs."""
+    global bcd_limit, slew_rate, bcds
+
+    builder.SetDeviceName(device_name)
+    bcd_limit = builder.aOut(
+        "BCD_LIMIT",
+        0,
+        1000,
+        EGU="um",
+        initial_value=BCD_LIMIT,
+        on_update=Axis.refresh_all_limits,
+    )
+    slew_rate = builder.aOut("SLEW_RATE", EGU="um/s", initial_value=BCD_SLEW_RATE)
+
+    # We hang onto the created BCD instances for debugging in case we decide to do
+    # some poking about in the live system!
+    bcds = create_bcds()
+    return {"bcds": bcds}

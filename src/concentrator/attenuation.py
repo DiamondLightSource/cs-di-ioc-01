@@ -29,7 +29,7 @@ class Attenuation:
 
         return on_write
 
-    def __init__(self, attenuations, auto_down, auto_up):
+    def __init__(self, attenuations, auto_down, auto_up, atten):
         self.auto_up = auto_up
         self.auto_down = auto_down
 
@@ -59,7 +59,8 @@ class Attenuation:
         self.status = Status("ATTENUATION")
         cothread.Timer(1, self.UpdateStatus, retrigger=True)
 
-        self.atten = AttenUpdater
+        # Injected updater for attenuation control (previously AttenUpdater global)
+        self.atten = atten
         self.atten_values = [db for db, ma in attenuations]
         self.auto_index = len(enums) + 1
         self.index = 0
@@ -139,5 +140,16 @@ class Attenuation:
         self.status.Update(ok)
 
 
-builder.SetDeviceName("SR-DI-EBPM-01")
-attenuation = Attenuation(ATTENUATOR_LIST, 10, 75)
+def setup(
+    device_name="SR-DI-EBPM-01",
+    attenuations=ATTENUATOR_LIST,
+    auto_down=10,
+    auto_up=75,
+    atten_updater=None,
+):
+    """Register PVs for attenuation and return the Attenuation instance.
+    atten_updater must be an Updater instance controlling CF:ATTEN."""
+    builder.SetDeviceName(device_name)
+    if atten_updater is None:
+        raise ValueError("atten_updater must be provided")
+    return Attenuation(attenuations, auto_down, auto_up, atten=atten_updater)
