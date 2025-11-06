@@ -3,9 +3,8 @@
 from argparse import ArgumentParser
 from collections.abc import Sequence
 
-from concentrator.concentrator import start_concentrator
-
 from . import __version__
+from .concentrator import start_concentrator
 
 __all__ = ["main"]
 

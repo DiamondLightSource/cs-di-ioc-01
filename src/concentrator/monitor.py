@@ -3,11 +3,11 @@ import numpy
 from cothread import catools
 from softioc import builder
 
-from concentrator.bpm_list import *
+from .bpm_list import BPMS, BPM_count
 
 __all__ = [
-    "CaPutAll",
-    "MonitorArray",
+    "ca_put_all",
+    "monitor_array",
     "MonitorValue",
     "MonitorWaveform",
     "MonitorSimpleWaveform",
@@ -15,27 +15,30 @@ __all__ = [
 
 
 # Converts a BPM specific PV into one PV per BPM.
-def BPMpvs(name):
-    return ["%s:%s" % (bpm, name) for bpm in BPMS]
+def bpm_pvs(name):
+    return [f"{bpm}:{name}" for bpm in BPMS]
 
 
-def CaPutAll(pv, value, make_pvs=BPMpvs):
+def ca_put_all(pv, value, make_pvs=bpm_pvs):
     """Writes a value to all PVs.  The write process is spawned in the
     background to avoid blocking any other activites."""
 
     def put_task():
         ok = catools.caput(make_pvs(pv), value, throw=False)
-        if not numpy.all(ok):
+        if not all(ok):
             print("caput failed:")
-            for result in ok:
-                if not result:
-                    print("   ", str(result))
-                    break  # for the moment...
+            if isinstance(ok, catools.ca_nothing):
+                print("   ", str(ok))
+            else:
+                for result in ok:
+                    if not result:
+                        print("   ", str(result))
+                        break  # for the moment...
 
     cothread.Spawn(put_task)
 
 
-def MonitorArray(name, callback, datatype=None, timestamps=False, pvs=BPMpvs):
+def monitor_array(name, callback, datatype=None, timestamps=False, pvs=bpm_pvs):
     if timestamps:
         format = catools.FORMAT_TIME
     else:
@@ -63,11 +66,12 @@ class MonitorValue:
         self.value = value
 
     def update_vector(self, value, index):
+        assert isinstance(self.value, numpy.ndarray)
         self.value[index] = value
 
 
 class MonitorSimpleWaveform:
-    MonitorArray = staticmethod(MonitorArray)
+    monitor_array = staticmethod(monitor_array)
 
     def __init__(
         self,
@@ -82,24 +86,27 @@ class MonitorSimpleWaveform:
             server_name = name
 
         self.on_update = on_update
-        monitors = self.MonitorArray(
-            name, self.MonitorCallback, datatype=datatype, timestamps=timestamps
+        monitors = self.monitor_array(
+            name, self.monitor_callback, datatype=datatype, timestamps=timestamps
         )
-        self.length = len(monitors)
+        if isinstance(monitors, list):
+            self.length = len(monitors)
+        else:
+            self.length = 1
 
         self.value = numpy.zeros(self.length, dtype=datatype)
         self.waveform = builder.Waveform(server_name, +self.value, datatype=datatype)
 
         self.changed = False
-        cothread.Timer(tick, self.Update, retrigger=True)
+        cothread.Timer(tick, self.update, retrigger=True)
 
-    def MonitorCallback(self, value, index):
+    def monitor_callback(self, value, index):
         """This routine is called each time any of the monitored elements
         changes."""
         self.value[index] = value
         self.changed = True
 
-    def Update(self):
+    def update(self):
         """This is called on a timer and is used to generate a collected update
         for the entire waveform."""
         if self.changed:
@@ -114,7 +121,7 @@ class MonitorSimpleWaveform:
 
     active_value = masked_value
 
-    def UpdateDefault(self, value):
+    def update_default(self, value):
         pass
 
 
@@ -158,29 +165,29 @@ class MonitorWaveform:
         )
 
         self.changed = False
-        MonitorArray(
-            name, self.MonitorCallback, datatype=datatype, timestamps=timestamps
+        monitor_array(
+            name, self.monitor_callback, datatype=datatype, timestamps=timestamps
         )
-        cothread.Timer(tick, self.Update, retrigger=True)
+        cothread.Timer(tick, self.update, retrigger=True)
 
-    def MonitorCallback(self, value, index):
+    def monitor_callback(self, value, index):
         """This routine is called each time any of the monitored elements
         changes."""
         self.raw_value[index] = value
         self.changed = True
 
-    def UpdateDefault(self, default_value):
+    def update_default(self, default_value):
         self.default_value = default_value
         self.changed = True
 
-    def Update(self):
+    def update(self):
         """This is called on a timer and is used to generate a collected update
         for the entire waveform."""
         # For all those BPMs which are unresponsive we substitute the current
         # default value
         import concentrator.enabled as enabled
 
-        new_value = enabled.WaveformDefaults(self.raw_value, self.default_value)
+        new_value = enabled.waveform_defaults(self.raw_value, self.default_value)
         if self.offset:
             new_value -= self.offset
 
@@ -204,4 +211,4 @@ class MonitorWaveform:
         BPM_count."""
         import concentrator.enabled as enabled
 
-        return enabled.ActiveArray(self.raw_value)
+        return enabled.active_array(self.raw_value)

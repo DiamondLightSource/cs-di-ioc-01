@@ -1,6 +1,6 @@
 from softioc import builder
 
-import concentrator.monitor as monitor
+from . import monitor
 
 
 def setup(device_name="SR-DI-EBPM-01"):

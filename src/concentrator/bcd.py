@@ -13,8 +13,7 @@ import cothread
 from cothread import catools
 from softioc import alarm, builder
 
-import concentrator.bpm_list as bpm_list
-from concentrator.config import *
+from . import bpm_list, config
 
 
 # Manages interface to a single BCD value.  Wraps a camonitor with a local copy
@@ -22,15 +21,16 @@ from concentrator.config import *
 # slewing.
 #   This class also translates between microns and millimetres: the interface to
 # external PV is in millimetres, but internally we work in microns.
-class BCD_PV:
-    def __init__(self, name, on_update):
+class BcdPv:
+    def __init__(self, name, on_update, slew_rate_pv):
         self.name = name
         self.on_update = on_update
+        self.slew_rate = slew_rate_pv
 
         self.value = 0
         catools.camonitor(name, self.__update)
 
-        self.target = None
+        self.target: float | None = None
         self.ready = cothread.Event()
         cothread.Spawn(self.__slewing)
 
@@ -44,8 +44,9 @@ class BCD_PV:
 
     # Computes target for a single update
     def __compute_target(self):
+        assert self.target is not None
         delta = self.target - self.value
-        max_step = slew_rate.get() * BCD_SLEW_INTERVAL
+        max_step = self.slew_rate.get() * config.BCD_SLEW_INTERVAL
         if abs(delta) <= max_step:
             return self.target
         elif delta > 0:
@@ -68,24 +69,7 @@ class BCD_PV:
                     self.target = None
                     self.on_update()
 
-                cothread.Sleep(BCD_SLEW_INTERVAL)
-
-
-# Clip values a, b to most extreme possible value against each limit.
-def constrain_bcd(a, b):
-    def clip(l, a, b):
-        return (l, l / a * b)
-
-    limit = bcd_limit.get()
-    if a > limit:
-        a, b = clip(limit, a, b)
-    elif a < -limit:
-        a, b = clip(-limit, a, b)
-    if b > limit:
-        b, a = clip(limit, b, a)
-    elif b < -limit:
-        b, a = clip(-limit, b, a)
-    return (a, b)
+                cothread.Sleep(config.BCD_SLEW_INTERVAL)
 
 
 # BCD control for a single axis: controls end points (called left and right) in
@@ -95,9 +79,11 @@ class Axis:
     # axes, in particular refreshing limits when the bcd_limit changes.
     all_axes = []
 
-    def __init__(self, parent, axis, length, centre, left, right):
+    def __init__(
+        self, parent, axis, length, centre, left, right, bcd_limit_pv, slew_rate_pv
+    ):
         def pv_name(field):
-            return "%s:%s" % (axis, field)
+            return f"{axis}:{field}"
 
         self.all_axes.append(self)
 
@@ -105,6 +91,7 @@ class Axis:
 
         self.length = length
         self.centre = centre
+        self.bcd_limit = bcd_limit_pv
 
         self.target_offset = builder.aOut(
             pv_name("OFFSET_S"),
@@ -131,8 +118,8 @@ class Axis:
         self.max_angle = builder.aIn(pv_name("ANGLE:MAX"), PREC=2, EGU="u rad")
 
         # Monitor and control for the two BCD settings we need to manage.
-        self.left = BCD_PV("%s:CF:BCD_%s_S" % (left, axis), self.update_bcd)
-        self.right = BCD_PV("%s:CF:BCD_%s_S" % (right, axis), self.update_bcd)
+        self.left = BcdPv(f"{left}:CF:BCD_{axis}_S", self.update_bcd, slew_rate_pv)
+        self.right = BcdPv(f"{right}:CF:BCD_{axis}_S", self.update_bcd, slew_rate_pv)
         # Mirror the left and right BCD settings so that we have uniform PV
         # names for use on the common display.  These mirrors are in microns.
         self.left_bcd = builder.aIn(pv_name("BCD:L"), PREC=2, EGU="um")
@@ -192,18 +179,18 @@ class Axis:
     #       -(1-k) d - M     <= c <= -(1-k) d + M
     #       (-c - M) / (1-k) <= d <= (-c + M) / (1-k)
     def compute_limits(self, offset, angle):
-        l = self.length
+        l = self.length  # noqa: E741
         c = offset
         d = angle * l
         k = self.centre
-        M = bcd_limit.get()
+        M = self.bcd_limit.get()  # noqa: N806
 
         return (
             max(k * d, -(1 - k) * d) - M,  # Min offset
             min(k * d, -(1 - k) * d) + M,  # Max offset
             max((c - M) / k, (-c - M) / (1 - k)) / l,  # Min angle
-            min((c + M) / k, (-c + M) / (1 - k)) / l,
-        )  # Max angle
+            min((c + M) / k, (-c + M) / (1 - k)) / l,  # Max angle
+        )
 
     def severity(self, min_val, max_val):
         if min_val < max_val:
@@ -238,13 +225,29 @@ class Axis:
         self.min_angle.set(min_angle, *angle_sev)
         self.max_angle.set(max_angle, *angle_sev)
 
+    # Clip values a, b to most extreme possible value against current limit.
+    def constrain_bcd(self, a, b):
+        def clip(lim, x, y):
+            return (lim, lim / x * y)
+
+        limit = self.bcd_limit.get()
+        if a > limit:
+            a, b = clip(limit, a, b)
+        elif a < -limit:
+            a, b = clip(-limit, a, b)
+        if b > limit:
+            b, a = clip(limit, b, a)
+        elif b < -limit:
+            b, a = clip(-limit, b, a)
+        return (a, b)
+
     # Computes end point coordinates from angle and offset and sets end points
     # accordingly after trimming to fit within acceptable bounds.
     def set_target(self, value):
         offset = self.target_offset.get()
         angle = self.target_angle.get()
         a, b = self.coord_to_bcd(offset, angle)
-        a, b = constrain_bcd(a, b)
+        a, b = self.constrain_bcd(a, b)
         self.left.put(a)
         self.right.put(b)
 
@@ -257,7 +260,7 @@ class Axis:
 
 # A single BCD control is a pair of axes X & Y.
 class BCD:
-    def __init__(self, name, right_id, length, centre):
+    def __init__(self, name, right_id, length, centre, bcd_limit_pv, slew_rate_pv):
         self.name = name  # To help with live debugging if necessary
 
         # Use BPM id of downstream BPM to compute BPM name and upstream BPM.
@@ -267,34 +270,38 @@ class BCD:
         left = bpm_list.BPMS[left_id - 1]
         right = bpm_list.BPMS[right_id - 1]
 
-        builder.SetDeviceName("SR-DI-%s-01" % name)
+        builder.SetDeviceName(f"SR-DI-{name}-01")
         self.enable_pv = builder.boolOut(
             "ENABLE_S", "Disabled", "Enabled", initial_value=True
         )
-        self.x = Axis(self, "X", length, centre, left, right)
-        self.y = Axis(self, "Y", length, centre, left, right)
+        self.x = Axis(
+            self, "X", length, centre, left, right, bcd_limit_pv, slew_rate_pv
+        )
+        self.y = Axis(
+            self, "Y", length, centre, left, right, bcd_limit_pv, slew_rate_pv
+        )
 
     def check_enabled(self):
         return self.enable_pv.get()
 
 
 # Create BCD controller for each straight.
-def create_bcds():
+def create_bcds(bcd_limit_pv, slew_rate_pv):
     def default_length(n):
         if (n - 1) % 4 == 0:
-            return BCD_LONG_LENGTH
+            return config.BCD_LONG_LENGTH
         else:
-            return BCD_SHORT_LENGTH
+            return config.BCD_SHORT_LENGTH
 
     # Creates a BCD controller named with given prefix.  The suffix is used to
     # identify the downstream BPM for the straight, this is C for most straights
     # and S for the two special straights in cells 9 and 13.
     def create_bcd(n, prefix, suffix, id=1):
-        name = "%s%02d" % (prefix, n)
-        bpm_id = bpm_list.BPM_name_id["SR%02d%s-DI-EBPM-%02d" % (n, suffix, id)]
-        length = BCD_SPECIAL_LENGTHS.get(name, default_length(n))
-        centre = BCD_SPECIAL_CENTRES.get(name, 0.5)
-        bcds.append(BCD(name, bpm_id, length, centre))
+        name = f"{prefix}{n:02d}"
+        bpm_id = bpm_list.BPM_name_id[f"SR{n:02d}{suffix}-DI-EBPM-{id:02d}"]
+        length = config.BCD_SPECIAL_LENGTHS.get(name, default_length(n))
+        centre = config.BCD_SPECIAL_CENTRES.get(name, 0.5)
+        bcds.append(BCD(name, bpm_id, length, centre, bcd_limit_pv, slew_rate_pv))
 
     bcds = []
     for n in range(1, 25):
@@ -312,28 +319,23 @@ def create_bcds():
     return bcds
 
 
-# Define these as globals for now for simplicity
-bcd_limit = None
-slew_rate = None
-bcds = None
-
-
 def setup_bcd(device_name="SR-DI-EBPM-01"):
     """Create BCD controllers and related PVs."""
-    global bcd_limit, slew_rate, bcds
 
     builder.SetDeviceName(device_name)
-    bcd_limit = builder.aOut(
+    bcd_limit_pv = builder.aOut(
         "BCD_LIMIT",
         0,
         1000,
         EGU="um",
-        initial_value=BCD_LIMIT,
+        initial_value=config.BCD_LIMIT,
         on_update=Axis.refresh_all_limits,
     )
-    slew_rate = builder.aOut("SLEW_RATE", EGU="um/s", initial_value=BCD_SLEW_RATE)
+    slew_rate_pv = builder.aOut(
+        "SLEW_RATE", EGU="um/s", initial_value=config.BCD_SLEW_RATE
+    )
 
     # We hang onto the created BCD instances for debugging in case we decide to do
     # some poking about in the live system!
-    bcds = create_bcds()
+    bcds = create_bcds(bcd_limit_pv, slew_rate_pv)
     return {"bcds": bcds}

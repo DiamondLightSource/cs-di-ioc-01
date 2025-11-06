@@ -17,6 +17,7 @@
 # Clearly the Python way is by name.
 
 import time
+from abc import ABC, abstractmethod
 
 import cothread
 import numpy
@@ -29,15 +30,15 @@ VERBOSE = False
 INVALID_severity = 3
 
 
-class ControllerBase:
-    """Captures common features of all controllers."""
+class ControllerBase(ABC):
+    """Abstract base class capturing common features of all controllers."""
 
     def __init__(
         self, delay, initial_delay, values, on_update, history_length, finish_early=True
     ):
         self.delay = 1e-3 * delay
         self.length = len(values)
-        self.values, shifts = zip(*values)
+        self.values, shifts = zip(*values, strict=True)
         self.shifts = 1e-3 * numpy.array(shifts)
         self.on_update = []
         if on_update is not None:
@@ -45,16 +46,26 @@ class ControllerBase:
         self.finish_early = finish_early
 
         for index, value in enumerate(self.values):
-            value._register(self, index, history_length)
+            value.register(self, index, history_length)
         self.value_ready = numpy.zeros(self.length, dtype=bool)
 
         self.timer = cothread.Timer(initial_delay, self.__complete, reuse=True)
+
+    @abstractmethod
+    def get_interval(self, index: int, timestamp: float) -> int:
+        """Return interval index for a given timestamp."""
+        ...
+
+    @abstractmethod
+    def _compute_origin(self, timestamps: numpy.ndarray, valid: numpy.ndarray) -> float:
+        """Compute and return the origin time for the completed interval."""
+        ...
 
     def hook_onupdate(self, on_update):
         self.on_update.append(on_update)
 
     # Called by each value when it is complete
-    def _ready(self, index):
+    def ready(self, index):
         if not self.value_ready[index]:
             self.value_ready[index] = True
             if self.finish_early and self.value_ready.all():
@@ -68,7 +79,7 @@ class ControllerBase:
         timestamps = numpy.empty(self.length)
         arrivals = numpy.empty(self.length)
         for i, value in enumerate(self.values):
-            this = value._finalise()  # Generates individual update notify
+            this = value.finalise()  # Generates individual update notify
             values.append(this)
             valid[i] = this.valid
             timestamps[i] = this.timestamp
@@ -83,7 +94,7 @@ class ControllerBase:
 
         self.value_ready[:] = False
         for value in self.values:
-            value._advance()
+            value.advance()
 
 
 class IntervalController(ControllerBase):
@@ -137,7 +148,7 @@ class IntervalController(ControllerBase):
         self.adjust_iir = adjust_iir
         self.origin = time.time()
 
-    def _get_interval(self, index, timestamp):
+    def get_interval(self, index, timestamp):
         """Returns interval number.  The caller should have already applied any
         needed shift to the timestamp."""
         return int(
@@ -174,7 +185,7 @@ class TriggeredController(ControllerBase):
         super().__init__(delay, None, values, on_update, 1, finish_early)
         self.active = False
 
-    def _get_interval(self, index, timestamp):
+    def get_interval(self, index, timestamp):
         if not self.active:
             self.active = True
             self.timer.reset(self.delay)
@@ -200,14 +211,14 @@ class IrregularController:
         self.values = values
 
         for index, value in enumerate(self.values):
-            value._register(self, index, 1)
+            value.register(self, index, 1)
         self.waiting = False
         self.holdoff = False
 
-    def _ready(self, index):
+    def ready(self, index):
         pass
 
-    def _get_interval(self, index, timestamp):
+    def get_interval(self, index, timestamp):
         if not self.waiting:
             self.waiting = True
             if not self.holdoff:
@@ -221,7 +232,7 @@ class IrregularController:
 
         for value in self.values:
             # Note that we don't advance the values.
-            value._finalise()
+            value.finalise()
 
     def __holdoff(self):
         self.holdoff = False
@@ -229,7 +240,7 @@ class IrregularController:
             self.__complete()
 
 
-class Controller_extra:
+class ControllerExtra:
     """A helper class for IntervalController which also publishes a number of
     interval diagnostic PVs."""
 
@@ -237,16 +248,14 @@ class Controller_extra:
         self.controller = controller
         controller.hook_onupdate(self.on_update)
         self.valid_pv = builder.Waveform(
-            "%s:VALID" % name, length=controller.length, datatype=numpy.uint8, TSE=-2
+            f"{name}:VALID", length=controller.length, datatype=numpy.uint8, TSE=-2
         )
-        self.ts_pv = builder.Waveform("%s:TS" % name, length=controller.length, TSE=-2)
-        self.age_pv = builder.Waveform(
-            "%s:AGE" % name, length=controller.length, TSE=-2
-        )
+        self.ts_pv = builder.Waveform(f"{name}:TS", length=controller.length, TSE=-2)
+        self.age_pv = builder.Waveform(f"{name}:AGE", length=controller.length, TSE=-2)
         self.offsets_pv = builder.Waveform(
-            "%s:OFFSETS" % name, length=controller.length, TSE=-2
+            f"{name}:OFFSETS", length=controller.length, TSE=-2
         )
-        self.delay_pv = builder.aIn("%s:DELAY" % name, TSE=-2)
+        self.delay_pv = builder.aIn(f"{name}:DELAY", TSE=-2)
 
     def on_update(self, values, valid, origin, timestamps, arrivals):
         now = time.time()
@@ -268,14 +277,14 @@ class ValueBase:
         self.__on_update = on_update
 
     # Called by the controller to complete initialisation of this value
-    def _register(self, controller, index, history_length):
+    def register(self, controller, index, history_length):
         self.controller = controller
         self.index = index
-        self.values = [self.factory() for n in range(history_length)]
+        self.values = [self.factory() for _ in range(history_length)]
 
     # Called by the controller to finish up the value.  Returns the current
     # value.
-    def _finalise(self):
+    def finalise(self):
         value = self.values[0]
         if self.validate(value):
             value.finalise()
@@ -286,10 +295,10 @@ class ValueBase:
         return value
 
     # Called by the controller to start a new interval.
-    def _advance(self):
+    def advance(self):
         self.values = self.values[1:] + [self.factory()]
         if self.values[0].valid:
-            self.controller._ready(self.index)
+            self.controller.ready(self.index)
 
     def update(self, timestamp, value, *extra):
         """To be called each time the underlying value has an update.  Arguments
@@ -298,7 +307,7 @@ class ValueBase:
         #         if numpy.random.randint(10) == 0: return    # Discard random data
         #         timestamp += 0.04 * numpy.random.randn()    # Fuzz the timestamp
 
-        interval = self.controller._get_interval(self.index, timestamp)
+        interval = self.controller.get_interval(self.index, timestamp)
         if interval >= 0:
             try:
                 value_base = self.values[interval]
@@ -308,7 +317,7 @@ class ValueBase:
             else:
                 value_base.update(timestamp, value, *extra)
                 if interval == 0 and value_base.valid:
-                    self.controller._ready(self.index)
+                    self.controller.ready(self.index)
         else:
             # Value is too old, all we can do is discard it.
             if VERBOSE:
@@ -384,7 +393,7 @@ class Value(ValueBase):
         super().__init__(name, UpdateValue, **kargs)
 
 
-class Value_PV(Value):
+class ValuePV(Value):
     """The usual case for a single data source: a single PV."""
 
     def __init__(self, pv, **kargs):
@@ -415,7 +424,7 @@ class Waveform(ValueBase):
         return value.valid
 
 
-class Waveform_PV(Waveform):
+class WaveformPV(Waveform):
     """A waveform aggregated from a collection of independently updating PVs.
     Only really works properly if there is some kind of synchronisation among
     the contributing PVs."""
@@ -428,14 +437,14 @@ class Waveform_PV(Waveform):
         self.update(value.timestamp, value, index)
 
 
-class Waveform_TS:
+class WaveformTS:
     """Helper class for published waveforms with timestamps."""
 
     def __init__(self, length, raw_name, ts_name=None, age_name=None):
         if ts_name is None:
-            ts_name = "%s:TS" % raw_name
+            ts_name = f"{raw_name}:TS"
         if age_name is None:
-            age_name = "%s:AGE" % raw_name
+            age_name = f"{raw_name}:AGE"
         self.wf_raw = builder.Waveform(raw_name, length=length, TSE=-2)
         self.wf_age = builder.Waveform(age_name, length=length, TSE=-2)
         self.wf_ts = builder.Waveform(ts_name, length=length, TSE=-2)
@@ -447,19 +456,19 @@ class Waveform_TS:
         self.wf_ts.set(1e3 * (value.timestamp_wf - ts), timestamp=ts)
 
 
-class Waveform_Out(Waveform_PV):
+class WaveformOut(WaveformPV):
     """Simple waveform with associated timestamps."""
 
     def __init__(self, name, pvs, **kargs):
         super().__init__(name, pvs, **kargs)
-        self.wf = Waveform_TS(len(pvs), name)
+        self.wf = WaveformTS(len(pvs), name)
 
     def on_update(self, value):
         super().on_update(value)
         self.wf.on_update(value)
 
 
-class MaskedWaveform(Waveform_PV):
+class MaskedWaveform(WaveformPV):
     def __init__(self, name, pvs, mask=None, offset=0, **kargs):
         super().__init__(name, pvs, **kargs)
 
@@ -471,9 +480,7 @@ class MaskedWaveform(Waveform_PV):
 
         length = len(pvs)
         self.wf_out = builder.Waveform(name, length=length, TSE=-2)
-        self.wf_ts = Waveform_TS(
-            length, "%s:RAW" % name, "%s:TS" % name, "%s:AGE" % name
-        )
+        self.wf_ts = WaveformTS(length, f"{name}:RAW", f"{name}:TS", f"{name}:AGE")
 
     def on_update(self, value):
         super().on_update(value)
@@ -489,7 +496,7 @@ class MaskedWaveform(Waveform_PV):
         self.wf_out.set(self.masked_value, timestamp=value.timestamp)
 
 
-class Waveform_Mean:
+class WaveformMean:
     """Average value waveform."""
 
     def __init__(self, name, **kargs):

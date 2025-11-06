@@ -4,14 +4,14 @@ import re
 
 import numpy
 
-from concentrator.config import *
+from . import config
 
 
 # Loads list of ids and bpms from BPM list file.
 def load_bpm_list():
-    match = re.compile(BPM_pattern)
-    range = set(BPM_id_range)
-    for line in open(BPM_list_file).readlines():
+    match = re.compile(config.BPM_pattern)
+    range = set(config.BPM_id_range)
+    for line in open(config.BPM_list_file).readlines():
         if line and line[0] != "#":
             id_bpm = line.split()
             if len(id_bpm) >= 2:
@@ -36,7 +36,10 @@ split_pattern = re.compile("SR(..)(.)-DI-EBPM-(..)")
 
 
 def make_bpm_id(bpm):
-    cell, place, num = split_pattern.match(bpm).groups()
+    m = split_pattern.match(bpm)
+    if not m:
+        raise ValueError(f"Invalid BPM name: {bpm!r}")
+    cell, place, num = m.groups()
     cell = int(cell)
     assert place in "CS"
     num = int(num)
@@ -56,9 +59,9 @@ BPM_count = len(BPMS)
 BPM_ids = map(make_bpm_id, BPMS)
 
 # Mapping from BPM name to BPM id
-BPM_name_id = dict((bpm, id) for id, bpm in BPM_list)
+BPM_name_id = {bpm: id for id, bpm in BPM_list}
 
 
 # Converts a BPM specific PV into one PV per BPM.
-def BPMpvs(name):
-    return ["%s:%s" % (bpm, name) for bpm in BPMS]
+def bpm_pvs(name):
+    return [f"{bpm}:{name}" for bpm in BPMS]

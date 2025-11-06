@@ -1,10 +1,9 @@
 import numpy
 from softioc import builder
 
-import concentrator.config as config
-import concentrator.enabled as enabled
-from concentrator.bpm_list import *
-from concentrator.monitor import *
+from . import config, enabled
+from .bpm_list import BPMS, BPM_count, BPM_ids, BPM_name_id
+from .monitor import MonitorSimpleWaveform, MonitorWaveform, monitor_array
 
 MAX_ADC = 2**15
 
@@ -27,12 +26,12 @@ class MaxADC(MonitorWaveform):
         self.severity = numpy.zeros(BPM_count, dtype=int)
         self._on_maxadc_update = on_maxadc_update
 
-    def MonitorCallback(self, value, index):
-        MonitorWaveform.MonitorCallback(self, value, index)
+    def monitor_callback(self, value, index):
+        MonitorWaveform.monitor_callback(self, value, index)
         self.severity[index] = value.severity
 
-    def Update(self):
-        MonitorWaveform.Update(self)
+    def update(self):
+        MonitorWaveform.update(self)
 
         maxadcwf = self.masked_value
         maxsev = numpy.amax(self.severity)
@@ -57,11 +56,11 @@ class CurrentWaveform:
         self.valid = numpy.ones(BPM_count, dtype=bool)
         self.valid[invalid_bpms] = False
 
-        self.waveform = MonitorSimpleWaveform("SA:CURRENT", on_update=self.Update)
+        self.waveform = MonitorSimpleWaveform("SA:CURRENT", on_update=self.update)
 
         self.mean = builder.aIn("SA:CURRENT:MEAN", 0, 500, EGU="mA", PREC=3)
 
-    def Update(self, changed):
+    def update(self, changed):
         # Select only the BPMs which are health and marked as valid.
         active = (enabled.Health.get() == 0) & self.valid
         values = self.waveform.value[active]
@@ -73,10 +72,10 @@ class CurrentWaveform:
 
 class CorrectorWaveform(MonitorSimpleWaveform):
     def corrector_pvs(self, name):
-        return ["SR%02dA-CS-FOFB-01:%s" % (c + 1, name) for c in range(24)]
+        return [f"SR{c + 1:02d}A-CS-FOFB-01:{name}" for c in range(24)]
 
-    def MonitorArray(self, *args, **kwargs):
-        return MonitorArray(*args, pvs=self.corrector_pvs, **kwargs)
+    def monitor_array(self, *args, **kwargs):
+        return monitor_array(*args, pvs=self.corrector_pvs, **kwargs)
 
 
 def setup(device_name="SR-DI-EBPM-01", on_maxadc_update=None):

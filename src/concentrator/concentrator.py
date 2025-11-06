@@ -14,18 +14,18 @@ def start_concentrator():
 
     builder.Action("RESTART", on_update=softioc.epicsExit)
 
-    from softioc import pvlog
-
-    import concentrator.attenuation as attenuation
-    import concentrator.autocurrent as autocurrent
-    import concentrator.bcd as bcd
-    import concentrator.booster as booster
-    import concentrator.enabled as enabled
-    import concentrator.injection as injection
-    import concentrator.interlock as interlock
-    import concentrator.maxadc as maxadc
-    import concentrator.sr as sr
-    import concentrator.updater as updater
+    from . import (
+        attenuation,
+        autocurrent,
+        bcd,
+        booster,
+        enabled,
+        injection,
+        interlock,
+        maxadc,
+        sr,
+        updater,
+    )
 
     # 1) Core health/enable state
     enabled.setup()
@@ -38,7 +38,7 @@ def start_concentrator():
     atten = attenuation.setup(atten_updater=atten_updater)
 
     # 4) MaxADC and related waveforms (hook attenuation auto logic)
-    maxadc.setup(on_maxadc_update=atten.UpdateMaxAdc)
+    maxadc.setup(on_maxadc_update=atten.update_max_adc)
 
     # 5) Auto current scaling (needs maxadc.current created)
     autocurrent.setup()

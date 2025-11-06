@@ -12,7 +12,7 @@ import concentrator.monitor as monitor
 class AutoCurrent:
     def __init__(self, interval):
         self.dcct = monitor.MonitorValue("SR-DI-DCCT-01:SIGNAL")
-        self.scales = monitor.MonitorValue(monitor.BPMpvs("CF:ISCALE_S"))
+        self.scales = monitor.MonitorValue(monitor.bpm_pvs("CF:ISCALE_S"))
         self.iir_k = builder.aOut(
             "ISCALE_K", 0, 1, initial_value=config.ISCALE_SCALING_K
         )
@@ -20,22 +20,22 @@ class AutoCurrent:
             "ISCALE_MIN", 0, 250, initial_value=config.ISCALE_DCCT_THRESHOLD
         )
 
-        self.timer = cothread.Timer(interval, self.Timer, retrigger=True)
+        self.timer = cothread.Timer(interval, self.timer_method, retrigger=True)
         builder.aOut(
             "ISCALE_INTERVAL",
             0,
             120,
             initial_value=interval,
-            on_update=self.UpdateInterval,
+            on_update=self.update_interval,
         )
 
-    def UpdateInterval(self, interval):
+    def update_interval(self, interval):
         # The easiest way to change the timer interval is to cancel the timer
         # and fire a new one
         self.timer.cancel()
-        self.timer = cothread.Timer(interval, self.Timer, retrigger=True)
+        self.timer = cothread.Timer(interval, self.timer_method, retrigger=True)
 
-    def Timer(self):
+    def timer_method(self):
         dcct = self.dcct.value
         threshold = self.threshold.get()
         # Only do anything if the dcct reading is high enough
@@ -53,11 +53,13 @@ class AutoCurrent:
             iir_scales = iir_k * new_scales + (1 - iir_k) * scales
             pvs = [
                 pv
-                for pv, valid in zip(monitor.BPMpvs("CF:ISCALE_S"), sane_currents)
+                for pv, valid in zip(
+                    monitor.bpm_pvs("CF:ISCALE_S"), sane_currents, strict=True
+                )
                 if valid
             ]
             if pvs:
-                ok = catools.caput(pvs, iir_scales[sane_currents], throw=False)
+                catools.caput(pvs, iir_scales[sane_currents], throw=False)
 
 
 def setup(device_name="SR-DI-EBPM-01", interval=None):

@@ -2,30 +2,29 @@
 
 from softioc import builder
 
-import concentrator.monitor as monitor
-import concentrator.updater as updater
+from . import monitor, updater
 
 
-def EVRpvs(name):
-    return ["SR%02dC-DI-EVR-01:%s" % (c + 1, name) for c in range(24)]
+def evr_pvs(name):
+    return [f"SR{c + 1:02d}C-DI-EVR-01:{name}" for c in range(24)]
 
 
 class EVRWaveform(monitor.MonitorSimpleWaveform):
-    def MonitorArray(self, *args, **kwargs):
-        return monitor.MonitorArray(*args, pvs=EVRpvs, **kwargs)
+    def monitor_array(self, *args, **kwargs):
+        return monitor.monitor_array(*args, pvs=evr_pvs, **kwargs)
 
 
-def EVRCaPutAll(pv, value):
-    monitor.CaPutAll(pv, value, make_pvs=EVRpvs)
+def evr_ca_put_all(pv, value):
+    monitor.ca_put_all(pv, value, make_pvs=evr_pvs)
 
 
-def EVRUpdater(name, monitor_name=None, **kargs):
+def evr_updater(name, monitor_name=None, **kargs):
     if monitor_name is None:
         monitor_name = name
     return updater.Updater(
         name,
         monitor=EVRWaveform,
-        caputall=EVRCaPutAll,
+        caputall=evr_ca_put_all,
         monitor_name=monitor_name,
         **kargs,
     )
@@ -33,7 +32,7 @@ def EVRUpdater(name, monitor_name=None, **kargs):
 
 def setup(device_name="SR-DI-EVR-01"):
     builder.SetDeviceName(device_name)
-    EVRUpdater(
+    evr_updater(
         "TRIG:MODE", enums=["", "Normal", "Synchronised", "Triggered", "Extra Trigger"]
     )
-    EVRUpdater("OT2D", "SET_HW.OT2D", max=0)
+    evr_updater("OT2D", "SET_HW.OT2D", max=0)

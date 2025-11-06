@@ -3,21 +3,20 @@
 import numpy
 from softioc import builder
 
-import concentrator.bpm_list as bpm_list
-import concentrator.intervals as intervals
-from concentrator.config import BTS_THRESHOLD, LTB_THRESHOLD
+from . import bpm_list, intervals
+from .config import BTS_THRESHOLD, LTB_THRESHOLD
 
 F_RF = 499654097  # 60 cm
 SR_BUNCHES = 936  # 561.6 m
 SR_MA_TO_NC = 1e6 * SR_BUNCHES / F_RF  # 1.87 us (534 kHz)
 
 
-class MS_Waveform(intervals.Waveform_Out):
-    ms_pvs = ["%s:MS:DELTAI" % bpm for bpm in bpm_list.BPMS]
+class MSWaveform(intervals.WaveformOut):
+    ms_pvs = [f"{bpm}:MS:DELTAI" for bpm in bpm_list.BPMS]
 
     def __init__(self):
         super().__init__("MS:DELTAI", self.ms_pvs)
-        self.mean_pv = intervals.Waveform_Mean("MS:DELTAI:MEAN")
+        self.mean_pv = intervals.WaveformMean("MS:DELTAI:MEAN")
 
     def on_update(self, value):
         super().on_update(value)
@@ -107,7 +106,7 @@ class Transfer:
     def __init__(self):
         # The MS waveform is an EBPM derived waveform
         builder.SetDeviceName("SR-DI-EBPM-01")
-        ms_wf = (MS_Waveform(), 303.8)
+        ms_wf = (MSWaveform(), 303.8)
 
         # Transfer efficiency PVs.  These are all CS-DI-XFER-01 PVs
         builder.SetDeviceName("CS-DI-XFER-01")
@@ -117,13 +116,13 @@ class Transfer:
         # DCCT needs to be converted into an SR:CHARGE calculation by scaling
         # and taking differences, and the MS values need to be scaled to compute
         # MS:DELTAQ
-        pvs = [(intervals.Value_PV(pv), shift) for pv, shift in self.xfr_pvs] + [ms_wf]
+        pvs = [(intervals.ValuePV(pv), shift) for pv, shift in self.xfr_pvs] + [ms_wf]
         self.controller = intervals.IntervalController(
             200, 350, pvs, self.on_update, history_length=3
         )
 
         # Generate visible status PVs for the controller.
-        self.extra = intervals.Controller_extra("INJECT", self.controller)
+        self.extra = intervals.ControllerExtra("INJECT", self.controller)
         # This will be updated with the scaled charge from MS
         self.dq_pv = builder.aIn("MS:DELTAQ", 0, 1, PREC=3, EGU="nC", TSE=-2)
         self.inject_pv = builder.Waveform(

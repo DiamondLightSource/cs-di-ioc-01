@@ -4,9 +4,8 @@ import cothread
 import numpy
 from softioc import builder
 
-import concentrator.config as config
-from concentrator.bpm_list import *
-from concentrator.monitor import *
+from . import config
+from .monitor import MonitorSimpleWaveform, MonitorWaveform, ca_put_all
 
 EnablerEnums = ["Disabled", "Enabled"]
 
@@ -17,7 +16,7 @@ class Status:
             name + ":STAT", "Ok", "Inconsistent", initial_value=0
         )
 
-    def Update(self, ok):
+    def update(self, ok):
         if ok:
             self.status.set(0, severity=0)
         else:
@@ -42,8 +41,8 @@ class Updater:
         min=0,
         max=1,
         waveform=False,
-        monitor=MonitorWaveform,
-        caputall=CaPutAll,
+        monitor: type[MonitorWaveform] | type[MonitorSimpleWaveform] = MonitorWaveform,
+        caputall=ca_put_all,
         auto_set=True,
         monitor_name=None,
         **extras,
@@ -54,7 +53,7 @@ class Updater:
             monitor_name = writer_name
 
         self.caputall = caputall
-        self.monitor = monitor(monitor_name, name, on_update=self.Update)
+        self.monitor = monitor(monitor_name, name, on_update=self.update)
 
         if enums:
             min = 0
@@ -64,41 +63,41 @@ class Updater:
         self.waveform = waveform
         self.min = min
         self.max = max
-        self.at_target = False
+        self.at_target_flag = False
         self.length = self.monitor.length
 
         if waveform:
             self.writer = builder.WaveformOut(
                 writer_name,
                 initial_value=numpy.zeros(self.length),
-                on_update=self.WriteNewValue,
-                validate=self.Validate,
+                on_update=self.write_new_value,
+                validate=self.validate,
                 **extras,
             )
         elif enums:
             self.writer = builder.mbbOut(
                 writer_name,
-                initial_value=0,
-                on_update=self.WriteNewValue,
-                validate=self.Validate,
                 *enums,
+                initial_value=0,
+                on_update=self.write_new_value,
+                validate=self.validate,
                 **extras,
             )
         else:
             self.writer = builder.longOut(
                 writer_name,
                 initial_value=0,
-                on_update=self.WriteNewValue,
-                validate=self.Validate,
+                on_update=self.write_new_value,
+                validate=self.validate,
                 **extras,
             )
 
         self.status = Status(name)
 
         if auto_set:
-            cothread.Timer(5, self.OnStartup)
+            cothread.Timer(5, self.on_startup)
 
-    def Validate(self, pv, value):
+    def validate(self, pv, value):
         """Called asynchronously to validate the proposed new value."""
         if self.min < self.max and (
             numpy.amin(value) < self.min or self.max < numpy.amax(value)
@@ -113,34 +112,34 @@ class Updater:
             # If get here, passed all tests.
             return True
 
-    def WriteNewValue(self, value):
-        self.monitor.UpdateDefault(value)
+    def write_new_value(self, value):
+        self.monitor.update_default(value)
         if self.waveform:
             self.writer.set(value)
         else:  # mmbOut or longOut which must be integer type
             self.writer.set(int(value))
         self.caputall(self.monitor_name, value)
 
-    def Update(self, changed):
-        self.at_target = (self.monitor.masked_value == self.writer.get()).all()
-        self.status.Update(self.at_target)
+    def update(self, changed):
+        self.at_target_flag = (self.monitor.masked_value == self.writer.get()).all()
+        self.status.update(self.at_target_flag)
 
-    def AtTarget(self, value):
-        return self.at_target and self.writer.get() == value
+    def at_target(self, value):
+        return self.at_target_flag and self.writer.get() == value
 
-    def GetValue(self):
+    def get_value(self):
         """Returns consensus value."""
         return numpy.median(self.monitor.active_value)
 
     # Called during startup after things have had a moment to settle
-    def OnStartup(self):
-        val = self.GetValue()
+    def on_startup(self):
+        val = self.get_value()
         if self.waveform:
             self.writer.set(val)
         else:  # mmbOut or longOut which must be integer type
             self.writer.set(int(val))
 
-        self.Update(False)
+        self.update(False)
 
 
 class CrossUpdater:
@@ -161,41 +160,44 @@ class CrossUpdater:
     def __init__(self, name, pvlist, lookup, enums, initial_value=0):
         builder.mbbOut(
             name + "_S",
-            initial_value=initial_value,
-            on_update=self.UpdateSetting,
             *enums,
+            initial_value=initial_value,
+            on_update=self.update_setting,
         )
         self.status = Status(name)
-        cothread.Timer(1, self.UpdateStatus, retrigger=True)
+        cothread.Timer(1, self.update_status, retrigger=True)
 
         self.lookup = lookup
         self.pvlist = pvlist
         self.index = initial_value
         self.setting = self.lookup[self.index]
 
-    def UpdateSetting(self, index):
+    def update_setting(self, index):
         try:
             self.setting = self.lookup[index]
             self.index = index
-        except:
+        except Exception:
             print("invalid value", index)
             return False
         else:
-            for pv, value in zip(self.pvlist, self.setting):
-                pv.WriteNewValue(value)
+            for pv, value in zip(self.pvlist, self.setting, strict=True):
+                pv.write_new_value(value)
             return True
 
-    def UpdateStatus(self):
-        self.status.Update(
+    def update_status(self):
+        self.status.update(
             numpy.all(
-                [pv.AtTarget(value) for pv, value in zip(self.pvlist, self.setting)]
+                [
+                    pv.at_target(value)
+                    for pv, value in zip(self.pvlist, self.setting, strict=True)
+                ]
             )
         )
 
 
 def reset_bcd(value):
-    CaPutAll("BCD_X_S", 0)
-    CaPutAll("BCD_Y_S", 0)
+    ca_put_all("BCD_X_S", 0)
+    ca_put_all("BCD_Y_S", 0)
 
 
 def setup(device_name="SR-DI-EBPM-01"):

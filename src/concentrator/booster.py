@@ -5,56 +5,55 @@ import numpy
 from cothread import catools
 from softioc import builder
 
-import concentrator.monitor as monitor
-import concentrator.updater as updater
+from . import monitor, updater
 
 
-def BRpvs(name):
+def br_pvs(name):
     return [
-        "BR%02dC-DI-EBPM-%02d:%s" % (((2 * n + 6) // 11) % 4 + 1, n + 1, name)
+        f"BR{((2 * n + 6) // 11) % 4 + 1:02d}C-DI-EBPM-{n + 1:02d}:{name}"
         for n in range(22)
     ]
 
 
-def LBpvs(name):
-    return ["LB-DI-EBPM-%02d:%s" % (n + 1, name) for n in range(7)]
+def lb_pvs(name):
+    return [f"LB-DI-EBPM-{n + 1:02d}:{name}" for n in range(7)]
 
 
-def BSpvs(name):
-    return ["BS-DI-EBPM-%02d:%s" % (n + 1, name) for n in range(7)]
+def bs_pvs(name):
+    return [f"BS-DI-EBPM-{n + 1:02d}:{name}" for n in range(7)]
 
 
 class BoosterWaveform(monitor.MonitorSimpleWaveform):
-    def MonitorArray(self, name, callback, datatype=None, timestamps=False):
+    def monitor_array(self, name, callback, datatype=None, timestamps=False):
         if timestamps:
             format = catools.FORMAT_TIME
         else:
             format = catools.FORMAT_RAW
         return catools.camonitor(
-            BRpvs(name), callback, datatype=datatype, format=format
+            br_pvs(name), callback, datatype=datatype, format=format
         )
 
 
-def BoosterCaPutAll(pv, value):
-    monitor.CaPutAll(pv, value, make_pvs=BRpvs)
+def booster_ca_put_all(pv, value):
+    monitor.ca_put_all(pv, value, make_pvs=br_pvs)
 
 
-def BoosterUpdater(name, **kargs):
+def booster_updater(name, **kargs):
     return updater.Updater(
-        name, monitor=BoosterWaveform, caputall=BoosterCaPutAll, **kargs
+        name, monitor=BoosterWaveform, caputall=booster_ca_put_all, **kargs
     )
 
 
 def setup(device_name="BR-DI-EBPM-01"):
     builder.SetDeviceName(device_name)
 
-    BoosterUpdater("CF:ATTEN", min=0, max=63, EGU="dB")
-    BoosterUpdater("CF:ATTEN:AGC", enums=["AGC off", "AGC on"])
-    BoosterUpdater("CF:AUTOSW", enums=["Manual", "Automatic"])
-    BoosterUpdater("CF:DSC", enums=["Fixed gains", "Unity gains", "Automatic"])
-    BoosterUpdater("CK:DETUNE", min=-1000, max=1000, EGU="ticks")
+    booster_updater("CF:ATTEN", min=0, max=63, EGU="dB")
+    booster_updater("CF:ATTEN:AGC", enums=["AGC off", "AGC on"])
+    booster_updater("CF:AUTOSW", enums=["Manual", "Automatic"])
+    booster_updater("CF:DSC", enums=["Fixed gains", "Unity gains", "Automatic"])
+    booster_updater("CK:DETUNE", min=-1000, max=1000, EGU="ticks")
     for enable in ["FT", "FR", "BN", "MS"]:
-        BoosterUpdater("%s:ENABLE" % enable, enums=["Disabled", "Enabled"])
+        booster_updater(f"{enable}:ENABLE", enums=["Disabled", "Enabled"])
 
     builder.WaveformIn("BPMID", 1 + numpy.arange(22))
     BoosterWaveform("SA:X")

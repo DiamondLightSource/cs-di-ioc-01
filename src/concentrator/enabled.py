@@ -1,12 +1,14 @@
 """Core EBPM monitoring code.  Monitors the SA positions and the ENABLED flags,
 aggregating the result into a set of global health monitoring PVs."""
 
+from typing import Any
+
 import cothread
 import numpy as np
 from softioc import alarm, builder
 
-from concentrator.bpm_list import BPM_count
-from concentrator.monitor import MonitorArray, MonitorWaveform
+from .bpm_list import BPM_count
+from .monitor import MonitorWaveform, monitor_array
 
 # How far we will allow aging before reporting the BPM as unreachable.  We
 # set this to four seconds to reduce the chance of spurious events.
@@ -21,23 +23,23 @@ Enabled = np.zeros(BPM_count)
 EnabledList = np.nonzero(Enabled)
 
 
-def WaveformDefaults(values, defaults):
+def waveform_defaults(values, defaults):
     """Sets all unreachable or disabled entries in values to the given
     defaults."""
     return np.where(Health.get() == 0, values, defaults)
 
 
-def ActiveArray(values):
+def active_array(values):
     """Returns all the currently active entries."""
     return values[EnabledList]
 
 
-def EnabledCallback(value, index):
+def enabled_callback(value, index):
     Age[index] = 0
     Enabled[index] = value
 
 
-def TimerTick():
+def timer_tick():
     # Age all the non responding entries and identify those which have passed
     # the age limit.
     global Age
@@ -52,17 +54,17 @@ def TimerTick():
     #   2 => more than AGE_LIMIT ticks with no update: unreachable
     #   1 => marked as disabled
     #   0 => enabled and operating normally
-    NewHealth = np.where(aged, 2, 1 - Enabled)
-    if (NewHealth != Health.get()).any():
-        Health.set(NewHealth)
+    new_health = np.where(aged, 2, 1 - Enabled)
+    if (new_health != Health.get()).any():
+        Health.set(new_health)
         global EnabledList
-        EnabledList = np.nonzero(NewHealth == 0)
+        EnabledList = np.nonzero(new_health == 0)
 
     # Count the three possible health states
-    EnabledCount.set(np.size(np.nonzero(NewHealth == 0)))
-    DisabledCount.set(np.size(np.nonzero(NewHealth == 1)))
+    EnabledCount.set(np.size(np.nonzero(new_health == 0)))
+    DisabledCount.set(np.size(np.nonzero(new_health == 1)))
 
-    unreachable = np.size(np.nonzero(NewHealth == 2))
+    unreachable = np.size(np.nonzero(new_health == 2))
     if unreachable:
         unreachable_severity = alarm.MAJOR_ALARM
     else:
@@ -71,12 +73,12 @@ def TimerTick():
 
 
 class PositionWaveform(MonitorWaveform):
-    def __Monitor(self, extra):
-        return builder.aIn("%s:%s" % (self.name, extra), -1, 1, PREC=5, EGU="mm")
+    def __monitor(self, extra):
+        return builder.aIn(f"{self.name}:{extra}", -1, 1, PREC=5, EGU="mm")
 
-    def __MonitorWF(self, extra):
+    def __monitor_wf(self, extra):
         return builder.Waveform(
-            "%s:%s" % (self.name, extra),
+            f"{self.name}:{extra}",
             np.zeros(BPM_count),
             datatype=np.float32,
             LOPR=-1,
@@ -88,17 +90,16 @@ class PositionWaveform(MonitorWaveform):
     def __init__(self, name):
         MonitorWaveform.__init__(self, name, tick=0.1)
 
-        self.std = self.__Monitor("STD")
-        self.mean = self.__Monitor("MEAN")
-        self.min = self.__Monitor("MIN")
-        self.max = self.__Monitor("MAX")
-        self.min_wf = self.__MonitorWF("MINWF")
-        self.max_wf = self.__MonitorWF("MAXWF")
+        self.std = self.__monitor("STD")
+        self.mean = self.__monitor("MEAN")
+        self.min = self.__monitor("MIN")
+        self.max = self.__monitor("MAX")
+        self.min_wf = self.__monitor_wf("MINWF")
+        self.max_wf = self.__monitor_wf("MAXWF")
+        self.reset = builder.Action(f"{self.name}:RESET", on_update=self.reset_min_max)
 
-        self.reset = builder.Action("%s:RESET" % self.name, on_update=self.ResetMinMax)
-
-    def Update(self):
-        MonitorWaveform.Update(self)
+    def update(self):
+        MonitorWaveform.update(self)
 
         active_array = self.active_value
 
@@ -119,7 +120,7 @@ class PositionWaveform(MonitorWaveform):
         self.min_wf.set(np.minimum(inactive_zero, self.min_wf.get()))
         self.max_wf.set(np.maximum(inactive_zero, self.max_wf.get()))
 
-    def ResetMinMax(self, value):
+    def reset_min_max(self, value):
         active_array = self.active_value
         inactive_zero = np.zeros(BPM_count)
         inactive_zero[EnabledList] = active_array
@@ -130,16 +131,16 @@ class PositionWaveform(MonitorWaveform):
 
 # We hook age reset code into the SA:X monitoring
 class MonitorAgeReset(PositionWaveform):
-    def MonitorCallback(self, value, index):
-        PositionWaveform.MonitorCallback(self, value, index)
+    def monitor_callback(self, value, index):
+        PositionWaveform.monitor_callback(self, value, index)
         Age[index] = 0
 
 
 # Placeholders until setup() is called
-Health = None
-EnabledCount = None
-DisabledCount = None
-UnreachableCount = None
+Health: Any = None
+EnabledCount: Any = None
+DisabledCount: Any = None
+UnreachableCount: Any = None
 
 
 def setup(device_name="SR-DI-EBPM-01"):
@@ -157,9 +158,9 @@ def setup(device_name="SR-DI-EBPM-01"):
     EnabledCount = builder.aIn("COUNT_ENABLED", initial_value=0)
     DisabledCount = builder.aIn("COUNT_DISABLED", initial_value=0)
     UnreachableCount = builder.aIn("COUNT_UNREACHABLE", initial_value=0)
-    cothread.Timer(0.2, TimerTick, retrigger=True)
+    cothread.Timer(0.2, timer_tick, retrigger=True)
 
     MonitorAgeReset("SA:X")
     PositionWaveform("SA:Y")
 
-    (MonitorArray("CF:ENABLED_S", EnabledCallback),)
+    (monitor_array("CF:ENABLED_S", enabled_callback),)

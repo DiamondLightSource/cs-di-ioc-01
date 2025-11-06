@@ -6,10 +6,8 @@ import cothread
 import numpy
 from softioc import builder
 
-from concentrator.bpm_list import *
-from concentrator.config import *
-from concentrator.monitor import *
-from concentrator.updater import *
+from . import config
+from .updater import Status, Updater
 
 
 class Attenuation:
@@ -29,7 +27,7 @@ class Attenuation:
 
         return on_write
 
-    def __init__(self, attenuations, auto_down, auto_up, atten):
+    def __init__(self, attenuations, auto_down, auto_up, updater: Updater):
         self.auto_up = auto_up
         self.auto_down = auto_down
 
@@ -48,19 +46,20 @@ class Attenuation:
             on_update=self.write_change("auto_down"),
         )
 
-        enums = ["%ddB/%dmA" % (db, ma) for db, ma in attenuations]
+        enums = [f"{db}dB/{ma}mA" for db, ma in attenuations]
         mode = builder.mbbOut(
             "ATTENUATION_S",
+            "Other",
+            *enums,
+            "Auto",
             initial_value=0,
-            on_update=self.UpdateSetting,
-            *["Other"] + enums + ["Auto"],
+            on_update=self.update_setting,
         )
 
         self.status = Status("ATTENUATION")
-        cothread.Timer(1, self.UpdateStatus, retrigger=True)
+        cothread.Timer(1, self.update_status, retrigger=True)
 
-        # Injected updater for attenuation control (previously AttenUpdater global)
-        self.atten = atten
+        self.updater = updater
         self.atten_values = [db for db, ma in attenuations]
         self.auto_index = len(enums) + 1
         self.index = 0
@@ -71,19 +70,19 @@ class Attenuation:
         # Switch into auto mode after giving things time to settle
         cothread.Timer(6, lambda: mode.set(len(enums) + 1))
 
-    def UpdateSetting(self, index):
+    def update_setting(self, index):
         self.index = index
         # The special Auto mode is handled separately.
         self.auto_mode = index == self.auto_index
         if self.auto_mode:
-            self.target_atten = self.atten.GetValue()
+            self.target_atten = self.updater.get_value()
         elif 0 < index < self.auto_index:
-            self.atten.WriteNewValue(self.atten_values[index - 1])
+            self.updater.write_new_value(self.atten_values[index - 1])
         return True
 
-    def StepAttenuation(self, step):
+    def step_attenuation(self, step):
         # Start by discovering the current attenuation.
-        atten = self.atten.GetValue()
+        atten = self.updater.get_value()
         index = bisect.bisect_left(self.atten_values, atten)
         if index < len(self.atten_values) and self.atten_values[index] == atten:
             # At the selected index
@@ -98,9 +97,9 @@ class Attenuation:
             if self.target_atten != atten:
                 print("StepAttenuation from", atten, "to", self.target_atten)
                 self.holdoff = self.HOLDOFF
-                self.atten.WriteNewValue(self.target_atten)
+                self.updater.write_new_value(self.target_atten)
 
-    def UpdateMaxAdc(self, values):
+    def update_max_adc(self, values):
         if self.holdoff:
             self.holdoff -= 1
         elif self.auto_mode:
@@ -119,30 +118,33 @@ class Attenuation:
             if high_count >= 2:
                 # If at least two BPMs are reading high then switch the
                 # attenuation up one step.
-                self.StepAttenuation(+1)
+                self.step_attenuation(+1)
             elif not_low_count == 0 and unreachable_count <= 2:
                 # A trifle tricky here.  Only step attenuation down if no BPMs
                 # are over the threshold and no more than two BPMs are recorded
                 # as currently unreachable.
-                self.StepAttenuation(-1)
+                self.step_attenuation(-1)
 
-    def UpdateStatus(self):
+    def update_status(self):
         """Ensures that the current attenuation readback is consistent with what
         we've configured."""
         if self.auto_mode:
-            ok = self.atten.GetValue() == self.target_atten and self.atten.at_target
+            ok = (
+                self.updater.get_value() == self.target_atten
+                and self.updater.at_target_flag
+            )
         elif self.index == 0:
             # In this mode we simply mirror ATTEN:STAT
-            ok = self.atten.at_target
+            ok = self.updater.at_target_flag
         else:
             # Specific attenuation selected, ensure this is where we are
-            ok = self.atten.AtTarget(self.atten_values[self.index - 1])
-        self.status.Update(ok)
+            ok = self.updater.at_target(self.atten_values[self.index - 1])
+        self.status.update(ok)
 
 
 def setup(
     device_name="SR-DI-EBPM-01",
-    attenuations=ATTENUATOR_LIST,
+    attenuations=config.ATTENUATOR_LIST,
     auto_down=10,
     auto_up=75,
     atten_updater=None,
@@ -152,4 +154,4 @@ def setup(
     builder.SetDeviceName(device_name)
     if atten_updater is None:
         raise ValueError("atten_updater must be provided")
-    return Attenuation(attenuations, auto_down, auto_up, atten=atten_updater)
+    return Attenuation(attenuations, auto_down, auto_up, updater=atten_updater)
