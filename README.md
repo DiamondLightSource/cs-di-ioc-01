@@ -1,6 +1,3 @@
-[![CI](https://github.com/DiamondLightSource/concentrator/actions/workflows/ci.yml/badge.svg)](https://github.com/DiamondLightSource/concentrator/actions/workflows/ci.yml)
-[![Coverage](https://codecov.io/gh/DiamondLightSource/concentrator/branch/main/graph/badge.svg)](https://codecov.io/gh/DiamondLightSource/concentrator)
-
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 # concentrator
@@ -10,10 +7,10 @@ The Diagnostics Concentrator performs two key functions:
 • Readings from all storage ring BPMs are collected together into waveforms indexed by BPM id. \
 • Centralised control of all storage ring BPMs is provided through a number of simple controls.
 
-Source          | <https://github.com/DiamondLightSource/concentrator>
+Source          | <https://gitlab.diamond.ac.uk/controls/ioc/CS/cs-di-ioc-01>
 :---:           | :---:
 Docker          | `docker run ghcr.io/diamondlightsource/concentrator:latest`
-Releases        | <https://github.com/DiamondLightSource/concentrator/releases>
+Releases        | <https://gitlab.diamond.ac.uk/controls/ioc/CS/cs-di-ioc-01/releases>
 
 
 The concentrator can be started as:
