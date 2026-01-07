@@ -19,6 +19,38 @@ The concentrator can be started as:
 python -m concentrator
 ```
 
+## Setup and run in the command line
+
+- Load uv
+
+```bash
+module load uv
+```
+
+- Create the virtual environment:
+
+```bash
+uv sync
+```
+
+- Run the concentrator:
+
+```bash
+uv run concentrator
+```
+
+## Dependency Management
+
+- The project's dependencies are defined in the `dependencies` entry in `pyproject.toml`
+    - May specify version ranges
+- The *exact* versions of all packages used are recorded in `uv.lock`
+    - The first time any developer runs `uv sync` the `uv.lock` file is created and the package versions used recorded
+    - In future whenever `uv sync` is run the package versions recorded in `uv.lock` are installed
+    - If a new dependency is added to `pyproject.toml` then `uv sync` will install the latest compatible version of this dependency and record the package versions in `uv.lock`
+    - To update all packages to their latest compatible versions run `uv sync --upgrade`, this will update the installed packages and record these new versions in `uv.lock`
+    - Do not edit `uv.lock` directly
+    - Since `uv.lock` is included in the git repository this guarantees everyone working on the project uses exactly the same packages
+
 ## PVs
 
 All PVs provided by the concentrator are of the form `SR-DI-EBPM-01:`\<name>.
