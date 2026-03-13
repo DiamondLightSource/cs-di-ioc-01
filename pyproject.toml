@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "concentrator"
+name = "CS-DI-IOC-01"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
@@ -31,10 +31,10 @@ dev = [
 ]
 
 [project.scripts]
-concentrator = "concentrator.__main__:main"
+CS-DI-IOC-01 = "concentrator.__main__:main"
 
 [project.urls]
-GitHub = "https://github.com/DiamondLightSource/concentrator"
+GitHub = "https://github.com/DiamondLightSource/CS-DI-IOC-01"
 
 [[project.authors]] # Further authors may be added by duplicating this section
 email = "michael.abbott@diamond.ac.uk"
@@ -97,7 +97,7 @@ commands = [
     [
         "pyright",
         "--pythonpath",
-        ".venv/bin/python",
+        "{env:VIRTUAL_ENV}/bin/python",
         "src",
         "tests",
         { replace = "posargs", default = [

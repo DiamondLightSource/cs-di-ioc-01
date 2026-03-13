@@ -16,7 +16,7 @@ Releases        | <https://gitlab.diamond.ac.uk/controls/ioc/CS/cs-di-ioc-01/rel
 The concentrator can be started as:
 
 ```
-python -m concentrator
+python -m CS-DI-IOC-01
 ```
 
 ## Setup and run in the command line
@@ -36,7 +36,7 @@ uv sync
 - Run the concentrator:
 
 ```bash
-uv run concentrator
+uv run CS-DI-IOC-01
 ```
 
 ## Dependency Management

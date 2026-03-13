@@ -1,13 +1,13 @@
 # Changes here will be overwritten by Copier
-_commit: 5.0.0a4
+_commit: 5.0.2
 _src_path: https://github.com/DiamondLightSource/python-copier-template.git
 author_email: bryn.roberts@diamond.ac.uk
 author_name: Bryn Roberts
-component_lifecycle: production
+component_lifecycle: experimental
 component_owner: group:default/accelerator-controls
 component_type: service
 description: Collects readings and simple controls for all storage ring BPMs
-distribution_name: concentrator
+distribution_name: CS-DI-IOC-01
 docker: true
 docker_debug: false
 docs_type: README
@@ -15,6 +15,6 @@ git_platform: github.com
 github_org: DiamondLightSource
 package_name: concentrator
 pypi: false
-repo_name: concentrator
+repo_name: CS-DI-IOC-01
 strict_typing: false
 type_checker: pyright
