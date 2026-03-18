@@ -1,5 +1,6 @@
 """Interface for ``python -m concentrator``."""
 
+import os
 from argparse import ArgumentParser
 from collections.abc import Sequence
 
@@ -18,8 +19,16 @@ def main(args: Sequence[str] | None = None) -> None:
         action="version",
         version=__version__,
     )
-    parser.parse_args(args)
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Enable debug mode",
+    )
+    parsed_args = parser.parse_args(args)
 
+    if parsed_args.debug:
+        os.environ["EPICS_CAS_SERVER_PORT"] = "6064"
     start_concentrator()
 
 

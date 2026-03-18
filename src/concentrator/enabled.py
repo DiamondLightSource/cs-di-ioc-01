@@ -103,11 +103,8 @@ class PositionWaveform(MonitorWaveform):
 
         active_array = self.active_value
 
-        # Quick and dirty hack if nothing is live to ensure that none of the
-        # array inspections routines below fail.
-        # if len(active_array) < 2:  active_array = array([0.0, 0.0])
+        # If nothing is live ensure that the array inspections routines below don't fail
         if len(active_array) < 2:
-            print("Active array too small returning")
             return
 
         self.std.set(np.std(active_array))
