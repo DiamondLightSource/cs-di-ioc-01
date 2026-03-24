@@ -21,6 +21,44 @@ wheels = [
 ]
 
 [[package]]
+name = "cd-di-ioc-01"
+source = { editable = "." }
+dependencies = [
+    { name = "cothread" },
+    { name = "softioc" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "copier" },
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "tox-uv" },
+    { name = "types-mock" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cothread" },
+    { name = "softioc" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "copier" },
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+    { name = "tox-uv" },
+    { name = "types-mock" },
+]
+
+[[package]]
 name = "cfgv"
 version = "3.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -176,44 +214,6 @@ wheels = [
 [package.optional-dependencies]
 toml = [
     { name = "tomli", marker = "python_full_version <= '3.11'" },
-]
-
-[[package]]
-name = "cs-di-ioc-01"
-source = { editable = "." }
-dependencies = [
-    { name = "cothread" },
-    { name = "softioc" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "copier" },
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "tox-uv" },
-    { name = "types-mock" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cothread" },
-    { name = "softioc" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "copier" },
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "tox-uv" },
-    { name = "types-mock" },
 ]
 
 [[package]]

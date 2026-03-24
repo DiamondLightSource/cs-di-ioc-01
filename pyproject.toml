@@ -3,13 +3,12 @@ requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "CS-DI-IOC-01"
+name = "cd-di-ioc-01"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
 ]
 description = "Collects readings and simple controls for all storage ring BPMs"
 dependencies = ["softioc", "cothread"] # Add project dependencies here
@@ -31,10 +30,10 @@ dev = [
 ]
 
 [project.scripts]
-CS-DI-IOC-01 = "concentrator.__main__:main"
+cs-di-ioc-01 = "concentrator.__main__:main"
 
 [project.urls]
-GitHub = "https://github.com/DiamondLightSource/CS-DI-IOC-01"
+GitHub = "https://github.com/DiamondLightSource/cs-di-ioc-01"
 
 [[project.authors]] # Further authors may be added by duplicating this section
 email = "michael.abbott@diamond.ac.uk"

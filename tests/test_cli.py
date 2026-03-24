@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-from concentrator.concentrator import __version__
+from concentrator import __version__
 
 
 def test_cli_version():

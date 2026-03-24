@@ -1,3 +1,5 @@
+[![CI](https://github.com/DiamondLightSource/cs-di-ioc-01/actions/workflows/ci.yml/badge.svg)](https://github.com/DiamondLightSource/cs-di-ioc-01/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/DiamondLightSource/cs-di-ioc-01/branch/main/graph/badge.svg)](https://codecov.io/gh/DiamondLightSource/cs-di-ioc-01)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 # concentrator
@@ -7,16 +9,16 @@ The Diagnostics Concentrator performs two key functions:
 • Readings from all storage ring BPMs are collected together into waveforms indexed by BPM id. \
 • Centralised control of all storage ring BPMs is provided through a number of simple controls.
 
-Source          | <https://gitlab.diamond.ac.uk/controls/ioc/CS/cs-di-ioc-01>
+Source          | <https://github.com/DiamondLightSource/cs-di-ioc-01>
 :---:           | :---:
-Docker          | `docker run ghcr.io/diamondlightsource/concentrator:latest`
-Releases        | <https://gitlab.diamond.ac.uk/controls/ioc/CS/cs-di-ioc-01/releases>
+Docker          | `docker run ghcr.io/diamondlightsource/cs-di-ioc-01:latest`
+Releases        | <https://github.com/DiamondLightSource/cs-di-ioc-01/releases>
 
 
 The concentrator can be started as:
 
 ```
-python -m CS-DI-IOC-01
+python -m cs_di_ioc_01
 ```
 
 ## Setup and run in the command line
@@ -36,7 +38,7 @@ uv sync
 - Run the concentrator:
 
 ```bash
-uv run CS-DI-IOC-01
+uv run cs-di-ioc-01
 ```
 
 ## Dependency Management

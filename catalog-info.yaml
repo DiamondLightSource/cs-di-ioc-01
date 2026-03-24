@@ -1,10 +1,10 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: CS-DI-IOC-01
-  title: CS-DI-IOC-01
+  name: cd-di-ioc-01
+  title: cs-di-ioc-01
   description: Collects readings and simple controls for all storage ring BPMs
 spec:
   type: service
-  lifecycle: experimental
+  lifecycle: production
   owner: group:default/accelerator-controls
