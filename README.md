@@ -18,7 +18,7 @@ Releases        | <https://github.com/DiamondLightSource/cs-di-ioc-01/releases>
 The concentrator can be started as:
 
 ```
-python -m cs_di_ioc_01
+python -m concentrator
 ```
 
 ## Setup and run in the command line

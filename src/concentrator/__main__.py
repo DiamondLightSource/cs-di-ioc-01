@@ -25,6 +25,12 @@ def main(args: Sequence[str] | None = None) -> None:
         action="store_true",
         help="Enable debug mode",
     )
+    parser.add_argument(
+        "-r",
+        "--run",
+        action="store_true",
+        help="Run the concentrator (default)",
+    )
     parsed_args = parser.parse_args(args)
 
     if parsed_args.debug:
