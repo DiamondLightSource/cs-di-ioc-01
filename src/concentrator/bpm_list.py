@@ -49,17 +49,27 @@ def make_bpm_id(bpm):
         return cell + 0.1 * num - 0.2
 
 
-# Load (id, bpm) list from file
-BPM_list = list(load_bpm_list())
-validate_bpm_list(BPM_list)
+BPM_list: list = []
+BPMS: list = []
+BPM_count: int = 0
+BPM_ids: list = []
+BPM_name_id: dict = {}
 
-# List of all BPMs in order around the ring.
-BPMS = [bpm for id, bpm in BPM_list]
-BPM_count = len(BPMS)
-BPM_ids = map(make_bpm_id, BPMS)
 
-# Mapping from BPM name to BPM id
-BPM_name_id = {bpm: id for id, bpm in BPM_list}
+def load() -> None:
+    global BPM_list, BPMS, BPM_count, BPM_ids, BPM_name_id
+
+    # Load (id, bpm) list from file
+    BPM_list = list(load_bpm_list())
+    validate_bpm_list(BPM_list)
+
+    # List of all BPMs in order around the ring.
+    BPMS = [bpm for id, bpm in BPM_list]
+    BPM_count = len(BPMS)
+    BPM_ids = list(map(make_bpm_id, BPMS))
+
+    # Mapping from BPM name to BPM id
+    BPM_name_id = {bpm: id for id, bpm in BPM_list}
 
 
 # Converts a BPM specific PV into one PV per BPM.

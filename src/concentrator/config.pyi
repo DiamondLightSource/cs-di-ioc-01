@@ -2,6 +2,10 @@ from collections.abc import Sequence
 
 # Type hints for configuration parameters
 
+CONFIG_FILE: str
+
+def load(path: str = ...) -> None: ...
+
 BPM_list_file: str
 BPM_pattern: str
 BPM_id_range: range

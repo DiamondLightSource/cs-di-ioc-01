@@ -6,8 +6,10 @@
 # CONFIG_FILE = "/home/ops/diagnostics/config/CS-DI-IOC-01.config"
 CONFIG_FILE = "CS-DI-IOC-01.config"
 
-config_dir = {}
-exec(open(CONFIG_FILE).read(), {}, config_dir)
 
-__all__ = list(config_dir.keys())
-globals().update(config_dir)
+def load(path: str = CONFIG_FILE) -> None:
+    config_dir = {}
+    exec(open(path).read(), {}, config_dir)
+    globals().update(config_dir)
+    global __all__
+    __all__ = list(config_dir.keys())
