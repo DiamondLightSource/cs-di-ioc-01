@@ -129,7 +129,12 @@ class Updater:
 
     def get_value(self):
         """Returns consensus value."""
-        return numpy.median(self.monitor.active_value)
+        active = self.monitor.active_value
+        if len(active) == 0:
+            raise ValueError(
+                f"{self.name}: no active BPMs, cannot determine consensus value"
+            )
+        return numpy.median(active)
 
     # Called during startup after things have had a moment to settle
     def on_startup(self):
@@ -138,7 +143,6 @@ class Updater:
             self.writer.set(val)
         else:  # mmbOut or longOut which must be integer type
             self.writer.set(int(val))
-
         self.update(False)
 
 
