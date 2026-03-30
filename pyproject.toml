@@ -11,7 +11,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 description = "Collects readings and simple controls for all storage ring BPMs"
-dependencies = ["softioc", "cothread"] # Add project dependencies here
+dependencies = [
+    "softioc",
+    "cothread",
+    "stdio-socket>=1.4.0",
+] # Add project dependencies here
 dynamic = ["version"]
 license.file = "LICENSE"
 readme = "README.md"
