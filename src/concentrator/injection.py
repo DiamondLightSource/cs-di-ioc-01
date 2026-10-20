@@ -5,9 +5,8 @@ from softioc import builder
 
 from . import bpm_list, config, intervals
 
-F_RF = 499654097  # 60 cm
 SR_BUNCHES = 936  # 561.6 m
-SR_MA_TO_NC = 1e6 * SR_BUNCHES / F_RF  # 1.87 us (534 kHz)
+SR_MA_TO_NC = 1e6 * SR_BUNCHES / config.F_RF  # 1.87 us (534 kHz)
 
 
 class MSWaveform(intervals.WaveformOut):
@@ -117,7 +116,7 @@ class Transfer:
         # MS:DELTAQ
         pvs = [(intervals.ValuePV(pv), shift) for pv, shift in self.xfr_pvs] + [ms_wf]
         self.controller = intervals.IntervalController(
-            200, 350, pvs, self.on_update, history_length=3
+            200, 400, pvs, self.on_update, history_length=3
         )
 
         # Generate visible status PVs for the controller.
