@@ -494,14 +494,3 @@ class MaskedWaveform(WaveformPV):
         if self.offset:
             self.masked_value -= self.offset
         self.wf_out.set(self.masked_value, timestamp=value.timestamp)
-
-
-class WaveformMean:
-    """Average value waveform."""
-
-    def __init__(self, name, **kargs):
-        self.mean_pv = builder.aIn(name, TSE=-2, **kargs)
-
-    def on_update(self, value):
-        value.mean = numpy.mean(value.value[value.valid_wf])
-        self.mean_pv.set(value.mean, timestamp=value.timestamp)

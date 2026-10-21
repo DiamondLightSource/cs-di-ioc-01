@@ -8,17 +8,48 @@ from . import bpm_list, config, intervals
 SR_BUNCHES = 936  # 561.6 m
 SR_MA_TO_NC = 1e6 * SR_BUNCHES / config.F_RF  # 1.87 us (534 kHz)
 
+GLITCH_THRESHOLD = 4
+
 
 class MSWaveform(intervals.WaveformOut):
     ms_pvs = [f"{bpm}:MS:DELTAI" for bpm in bpm_list.BPMS]
+    HISTORY = 3
 
     def __init__(self):
         super().__init__("MS:DELTAI", self.ms_pvs)
-        self.mean_pv = intervals.WaveformMean("MS:DELTAI:MEAN")
+        self.mean_pv = builder.aIn("MS:DELTAI:MEAN", TSE=-2)
+
+        # All the code below and most of the code in on_update() is in place to
+        # cope with glitches in MS:DELTAI and to try and prevent them from
+        # contributing to MS:DELTAI:MEAN.
+        #
+        # When we see a glitch we blank updates from this source for three
+        # updates, so we maintain a history for this.
+        self.glitch_history = numpy.zeros((self.HISTORY, len(self.ms_pvs)), dtype=bool)
 
     def on_update(self, value):
         super().on_update(value)
-        self.mean_pv.on_update(value)
+
+        # Compute glitches by finding updates that are outside of the normal
+        # range.  The simplest approach is to look for samples that are more
+        # than a certain number of multiples of the standard deviation away from
+        # the mean value.
+        valid_values = value.value[value.valid_wf]
+        value_std = numpy.std(valid_values)
+        value_mean = numpy.mean(valid_values)
+        glitches = abs(value.value - value_mean) > GLITCH_THRESHOLD * value_std
+        # Ignore values with no update on this tick
+        glitches &= value.valid_wf
+
+        # Add any detected glitches to the glitch history
+        self.glitch_history = numpy.roll(self.glitch_history, 1, 0)
+        self.glitch_history[0] = glitches
+        # Exclude glitches and invalid values from our mean calculation
+        mean_mask = value.valid_wf & ~self.glitch_history.any(0)
+
+        # Finally compute the mean using the glitch free values
+        value.mean = numpy.mean(value.value[mean_mask])
+        self.mean_pv.set(value.mean, timestamp=value.timestamp)
 
 
 class TransferRatio:
