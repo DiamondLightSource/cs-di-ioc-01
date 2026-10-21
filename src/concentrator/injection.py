@@ -220,7 +220,10 @@ class Transfer:
         if valid[self.MS_CHARGE]:
             ms_charge = values[self.MS_CHARGE].mean * SR_MA_TO_NC
             self.dq_pv.set(ms_charge, timestamp=timestamps[self.MS_CHARGE])
-            return (ms_charge, True)
+            if numpy.isfinite(ms_charge):
+                return (ms_charge, True)
+            else:
+                return (ms_charge, False)
         else:
             return (numpy.nan, False)
 
@@ -260,6 +263,7 @@ class Transfer:
         values_wf[self.SR_SIGNAL] = sr_charge
         valid[self.SR_SIGNAL] = sr_charge_valid
         values_wf[self.MS_CHARGE] = ms_charge
+        valid[self.MS_CHARGE] = ms_charge_valid
 
         self.inject_pv.set(values_wf, timestamp=origin)
 
