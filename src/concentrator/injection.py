@@ -8,7 +8,7 @@ from . import bpm_list, config, intervals
 SR_BUNCHES = 936  # 561.6 m
 SR_MA_TO_NC = 1e6 * SR_BUNCHES / config.F_RF  # 1.87 us (534 kHz)
 
-GLITCH_THRESHOLD = 4
+MIN_VALID_DELTAI_VALUES = 50
 
 
 class MSWaveform(intervals.WaveformOut):
@@ -30,25 +30,25 @@ class MSWaveform(intervals.WaveformOut):
     def on_update(self, value):
         super().on_update(value)
 
-        # Compute glitches by finding updates that are outside of the normal
-        # range.  The simplest approach is to look for samples that are more
-        # than a certain number of multiples of the standard deviation away from
-        # the mean value.
-        valid_values = value.value[value.valid_wf]
-        value_std = numpy.std(valid_values)
-        value_mean = numpy.mean(valid_values)
-        glitches = abs(value.value - value_mean) > GLITCH_THRESHOLD * value_std
-        # Ignore values with no update on this tick
-        glitches &= value.valid_wf
+        # Identify glitches by finding updates that are beyond the glitch threshold,
+        # also ignore values with no update on this tick
+        glitches = (abs(value.value) > config.GLITCH_THRESHOLD) & ~value.valid_wf
+
+        # If there are too few values which havnt glitched abandon the entire update
+        if (~glitches).sum() < MIN_VALID_DELTAI_VALUES:
+            glitches[:] = True
 
         # Add any detected glitches to the glitch history
         self.glitch_history = numpy.roll(self.glitch_history, 1, 0)
         self.glitch_history[0] = glitches
+
         # Exclude glitches and invalid values from our mean calculation
         mean_mask = value.valid_wf & ~self.glitch_history.any(0)
+        valid_values = value.value[mean_mask]
 
-        # Finally compute the mean using the glitch free values
-        value.mean = numpy.mean(value.value[mean_mask])
+        # Finally compute the mean using the glitch free values. If we have no
+        # valid values this will return NaN
+        value.mean = numpy.mean(valid_values)
         self.mean_pv.set(value.mean, timestamp=value.timestamp)
 
 
