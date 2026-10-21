@@ -32,7 +32,7 @@ class MSWaveform(intervals.WaveformOut):
 
         # Identify glitches by finding updates that are beyond the glitch threshold,
         # also ignore values with no update on this tick
-        glitches = (abs(value.value) > config.GLITCH_THRESHOLD) & ~value.valid_wf
+        glitches = (abs(value.value) > config.GLITCH_THRESHOLD) | ~value.valid_wf
 
         # If there are too few values which havnt glitched abandon the entire update
         if (~glitches).sum() < MIN_VALID_DELTAI_VALUES:
