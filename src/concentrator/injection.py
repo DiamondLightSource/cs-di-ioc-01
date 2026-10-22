@@ -218,10 +218,7 @@ class Transfer:
         if valid[self.MS_CHARGE]:
             ms_charge = values[self.MS_CHARGE].mean * SR_MA_TO_NC
             self.dq_pv.set(ms_charge, timestamp=timestamps[self.MS_CHARGE])
-            if numpy.isfinite(ms_charge):
-                return (ms_charge, True)
-            else:
-                return (ms_charge, False)
+            return (ms_charge, numpy.isfinite(ms_charge))
         else:
             return (numpy.nan, False)
 
