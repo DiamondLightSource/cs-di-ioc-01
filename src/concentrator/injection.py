@@ -8,8 +8,6 @@ from . import bpm_list, config, intervals
 SR_BUNCHES = 936  # 561.6 m
 SR_MA_TO_NC = 1e6 * SR_BUNCHES / config.F_RF  # 1.87 us (534 kHz)
 
-MIN_VALID_DELTAI_VALUES = 50
-
 
 class MSWaveform(intervals.WaveformOut):
     ms_pvs = [f"{bpm}:MS:DELTAI" for bpm in bpm_list.BPMS]
@@ -35,7 +33,7 @@ class MSWaveform(intervals.WaveformOut):
         glitches = (abs(value.value) > config.GLITCH_THRESHOLD) | ~value.valid_wf
 
         # If there are too few values which havnt glitched abandon the entire update
-        if (~glitches).sum() < MIN_VALID_DELTAI_VALUES:
+        if (~glitches).sum() < config.MIN_VALID_DELTAI_VALUES:
             glitches[:] = True
 
         # Add any detected glitches to the glitch history
