@@ -41,7 +41,7 @@ class MSWaveform(intervals.WaveformOut):
         self.glitch_history[0] = glitches
 
         # Exclude glitches and invalid values from our mean calculation
-        mean_mask = value.valid_wf & ~self.glitch_history.any(0)
+        mean_mask = ~self.glitch_history.any(0)
         valid_values = value.value[mean_mask]
 
         # Finally compute the mean using the glitch free values. If we have no
