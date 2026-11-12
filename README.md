@@ -9,8 +9,9 @@ The Diagnostics Concentrator performs two key functions:
 • Readings from all storage ring BPMs are collected together into waveforms indexed by BPM id. \
 • Centralised control of all storage ring BPMs is provided through a number of simple controls.
 
-Source          | <https://github.com/DiamondLightSource/cs-di-ioc-01>
+What            | Where
 :---:           | :---:
+Source          | <https://github.com/DiamondLightSource/cs-di-ioc-01>
 Docker          | `docker run ghcr.io/diamondlightsource/cs-di-ioc-01:latest`
 Releases        | <https://github.com/DiamondLightSource/cs-di-ioc-01/releases>
 
