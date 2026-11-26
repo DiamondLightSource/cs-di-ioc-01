@@ -1,3 +1,5 @@
+import traceback
+
 import numpy
 from softioc import builder
 
@@ -45,9 +47,14 @@ class MaxADC(MonitorWaveform):
 
         self.maxid.set(BPMS[numpy.argmax(maxadcwf)])
 
-        # _on_maxadc_update is used for updating the attenuator
+        # _on_maxadc_update is used for updating the attenuator.  This runs on
+        # our retriggering cothread.Timer: any exception escaping here would
+        # stop the timer for good and freeze MAXADC_PC, so contain it.
         if self._on_maxadc_update:
-            self._on_maxadc_update(maxadcwf)
+            try:
+                self._on_maxadc_update(maxadcwf)
+            except Exception:
+                traceback.print_exc()
 
 
 class CurrentWaveform:

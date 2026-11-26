@@ -75,14 +75,22 @@ class Attenuation:
         # The special Auto mode is handled separately.
         self.auto_mode = index == self.auto_index
         if self.auto_mode:
-            self.target_atten = self.updater.get_value()
+            try:
+                self.target_atten = self.updater.get_value()
+            except ValueError:
+                # No active BPMs to read the current attenuation from
+                self.target_atten = None
         elif 0 < index < self.auto_index:
             self.updater.write_new_value(self.atten_values[index - 1])
         return True
 
     def step_attenuation(self, step):
-        # Start by discovering the current attenuation.
-        atten = self.updater.get_value()
+        # Start by discovering the current attenuation.  If no BPMs are active
+        # there is no consensus value and nothing sensible we can do.
+        try:
+            atten = self.updater.get_value()
+        except ValueError:
+            return
         index = bisect.bisect_left(self.atten_values, atten)
         if index < len(self.atten_values) and self.atten_values[index] == atten:
             # At the selected index
@@ -109,6 +117,10 @@ class Attenuation:
             # Only look at values from enabled BPMs
             health = enabled.Health.get()
             mask = health == 0
+            if not mask.any():
+                # No enabled BPMs
+                # No data to base an attenuation decision on.
+                return
             # Count the number of BPMs above the two AGC thresholds
             high_count = numpy.sum(numpy.where(mask, values > self.auto_up, 0))
             not_low_count = numpy.sum(numpy.where(mask, values > self.auto_down, 0))
@@ -129,8 +141,14 @@ class Attenuation:
         """Ensures that the current attenuation readback is consistent with what
         we've configured."""
         if self.auto_mode:
+            try:
+                atten = self.updater.get_value()
+            except ValueError:
+                # No active BPMs: report inconsistent
+                atten = None
             ok = (
-                self.updater.get_value() == self.target_atten
+                atten is not None
+                and atten == self.target_atten
                 and self.updater.at_target_flag
             )
         elif self.index == 0:
